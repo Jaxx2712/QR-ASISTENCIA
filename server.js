@@ -1,10 +1,11 @@
 const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
+const { createClient } = require('@libsql/client');
+require('dotenv').config();
 const path = require('path');
 const os = require('os');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
@@ -23,30 +24,30 @@ app.use((req, res, next) => {
 // Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Database setup
-const db = new sqlite3.Database(path.join(__dirname, 'asistencia.db'), (err) => {
-    if (err) {
-        console.error('Error connecting to database:', err.message);
-    } else {
-        console.log('Connected to the SQLite database.');
-        initDB();
-    }
+// Database setup con Turso / LibSQL
+const db = createClient({
+    url: process.env.TURSO_DATABASE_URL,
+    authToken: process.env.TURSO_AUTH_TOKEN,
 });
 
-function initDB() {
-    db.serialize(() => {
-        db.run(`CREATE TABLE IF NOT EXISTS workers (
+async function initDB() {
+    try {
+        await db.execute(`CREATE TABLE IF NOT EXISTS workers (
             dni TEXT PRIMARY KEY,
             nombre TEXT NOT NULL,
             cargo TEXT DEFAULT '',
             empresa TEXT DEFAULT '',
             foto TEXT DEFAULT '',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )`, () => {
-            db.run(`ALTER TABLE workers ADD COLUMN foto TEXT DEFAULT ''`, (err) => {});
-        });
+        )`);
 
-        db.run(`CREATE TABLE IF NOT EXISTS attendance (
+        try {
+            await db.execute(`ALTER TABLE workers ADD COLUMN foto TEXT DEFAULT ''`);
+        } catch (e) {
+            // Ignorar si la columna ya existe
+        }
+
+        await db.execute(`CREATE TABLE IF NOT EXISTS attendance (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             worker_dni TEXT NOT NULL,
             tipo TEXT NOT NULL CHECK(tipo IN ('Entrada','Salida')),
@@ -55,8 +56,14 @@ function initDB() {
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(worker_dni) REFERENCES workers(dni)
         )`);
-    });
+
+        console.log('Connected to Turso database and initialized tables.');
+    } catch (err) {
+        console.error('Error initializing database:', err.message);
+    }
 }
+
+initDB();
 
 function getLocalTime() {
     const now = new Date();
@@ -69,7 +76,7 @@ function getLocalTime() {
 // Routes
 
 // POST /api/workers - Register a worker
-app.post('/api/workers', (req, res) => {
+app.post('/api/workers', async (req, res) => {
     const { dni, nombre, cargo = '', empresa = '', foto = '' } = req.body;
     
     if (!dni || !nombre) {
@@ -84,140 +91,162 @@ app.post('/api/workers', (req, res) => {
         return res.status(400).json({ success: false, message: 'El nombre solo puede contener letras y espacios.' });
     }
 
-    db.run(
-        `INSERT INTO workers (dni, nombre, cargo, empresa, foto) VALUES (?, ?, ?, ?, ?)`,
-        [dni, nombre, cargo, empresa, foto],
-        function (err) {
-            if (err) {
-                if (err.message.includes('UNIQUE constraint failed')) {
-                    return res.status(409).json({ success: false, message: 'Trabajador ya existe.' });
-                }
-                return res.status(500).json({ success: false, message: err.message });
-            }
-            res.json({ success: true, message: 'Trabajador registrado exitosamente.' });
+    try {
+        await db.execute({
+            sql: `INSERT INTO workers (dni, nombre, cargo, empresa, foto) VALUES (?, ?, ?, ?, ?)`,
+            args: [dni, nombre, cargo, empresa, foto]
+        });
+        res.json({ success: true, message: 'Trabajador registrado exitosamente.' });
+    } catch (err) {
+        if (err.message && err.message.includes('UNIQUE constraint failed')) {
+            return res.status(409).json({ success: false, message: 'Trabajador ya existe.' });
         }
-    );
+        res.status(500).json({ success: false, message: err.message });
+    }
 });
 
 // GET /api/workers - Get all workers
-app.get('/api/workers', (req, res) => {
-    db.all(`SELECT * FROM workers ORDER BY nombre`, [], (err, rows) => {
-        if (err) return res.status(500).json({ success: false, message: err.message });
-        res.json(rows);
-    });
+app.get('/api/workers', async (req, res) => {
+    try {
+        const result = await db.execute(`SELECT * FROM workers ORDER BY nombre`);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
 });
 
 // GET /api/workers/:dni - Get single worker
-app.get('/api/workers/:dni', (req, res) => {
-    db.get(`SELECT * FROM workers WHERE dni = ?`, [req.params.dni], (err, row) => {
-        if (err) return res.status(500).json({ success: false, message: err.message });
-        if (!row) return res.status(404).json({ success: false, message: 'Trabajador no encontrado' });
-        res.json(row);
-    });
+app.get('/api/workers/:dni', async (req, res) => {
+    try {
+        const result = await db.execute({
+            sql: `SELECT * FROM workers WHERE dni = ?`,
+            args: [req.params.dni]
+        });
+        if (result.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Trabajador no encontrado' });
+        }
+        res.json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
 });
 
 // DELETE /api/workers/:dni - Delete worker and their attendance
-app.delete('/api/workers/:dni', (req, res) => {
-    db.serialize(() => {
-        db.run(`BEGIN TRANSACTION`);
-        db.run(`DELETE FROM attendance WHERE worker_dni = ?`, [req.params.dni]);
-        db.run(`DELETE FROM workers WHERE dni = ?`, [req.params.dni], function(err) {
-            if (err) {
-                db.run(`ROLLBACK`);
-                return res.status(500).json({ success: false, message: err.message });
+app.delete('/api/workers/:dni', async (req, res) => {
+    try {
+        await db.batch([
+            {
+                sql: `DELETE FROM attendance WHERE worker_dni = ?`,
+                args: [req.params.dni]
+            },
+            {
+                sql: `DELETE FROM workers WHERE dni = ?`,
+                args: [req.params.dni]
             }
-            db.run(`COMMIT`);
-            res.json({ success: true });
-        });
-    });
+        ]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
 });
 
 // POST /api/attendance - Record attendance
-app.post('/api/attendance', (req, res) => {
+app.post('/api/attendance', async (req, res) => {
     const { worker_dni, tipo } = req.body;
     if (!worker_dni || !tipo || !['Entrada', 'Salida'].includes(tipo)) {
         return res.status(400).json({ success: false, message: 'Invalid data' });
     }
 
-    db.get(`SELECT nombre FROM workers WHERE dni = ?`, [worker_dni], (err, worker) => {
-        if (err) return res.status(500).json({ success: false, message: err.message });
-        if (!worker) return res.status(404).json({ success: false, message: 'Trabajador no encontrado' });
+    try {
+        const workerResult = await db.execute({
+            sql: `SELECT nombre FROM workers WHERE dni = ?`,
+            args: [worker_dni]
+        });
 
+        if (workerResult.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Trabajador no encontrado' });
+        }
+
+        const worker = workerResult.rows[0];
         const { fecha, hora } = getLocalTime();
-        db.run(
-            `INSERT INTO attendance (worker_dni, tipo, fecha, hora) VALUES (?, ?, ?, ?)`,
-            [worker_dni, tipo, fecha, hora],
-            function (err) {
-                if (err) return res.status(500).json({ success: false, message: err.message });
-                res.json({ success: true, nombre: worker.nombre, tipo, fecha, hora });
-            }
-        );
-    });
+
+        await db.execute({
+            sql: `INSERT INTO attendance (worker_dni, tipo, fecha, hora) VALUES (?, ?, ?, ?)`,
+            args: [worker_dni, tipo, fecha, hora]
+        });
+
+        res.json({ success: true, nombre: worker.nombre, tipo, fecha, hora });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
 });
 
 // GET /api/attendance/:dni - Get attendance for a specific worker
-app.get('/api/attendance/:dni', (req, res) => {
+app.get('/api/attendance/:dni', async (req, res) => {
     let month = req.query.month;
     if (!month) {
         const { fecha } = getLocalTime();
         month = fecha.substring(0, 7); // YYYY-MM
     }
     
-    db.all(
-        `SELECT * FROM attendance WHERE worker_dni = ? AND fecha LIKE ? ORDER BY timestamp DESC`,
-        [req.params.dni, `${month}%`],
-        (err, rows) => {
-            if (err) return res.status(500).json({ success: false, message: err.message });
-            res.json(rows);
-        }
-    );
+    try {
+        const result = await db.execute({
+            sql: `SELECT * FROM attendance WHERE worker_dni = ? AND fecha LIKE ? ORDER BY timestamp DESC`,
+            args: [req.params.dni, `${month}%`]
+        });
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
 });
 
 // GET /api/attendance - Get all recent attendance
-app.get('/api/attendance', (req, res) => {
+app.get('/api/attendance', async (req, res) => {
     const limit = parseInt(req.query.limit) || 50;
-    db.all(
-        `SELECT a.*, w.nombre FROM attendance a JOIN workers w ON a.worker_dni = w.dni ORDER BY a.timestamp DESC LIMIT ?`,
-        [limit],
-        (err, rows) => {
-            if (err) return res.status(500).json({ success: false, message: err.message });
-            res.json(rows);
-        }
-    );
+    try {
+        const result = await db.execute({
+            sql: `SELECT a.*, w.nombre FROM attendance a JOIN workers w ON a.worker_dni = w.dni ORDER BY a.timestamp DESC LIMIT ?`,
+            args: [limit]
+        });
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
 });
 
 // GET /api/dashboard - Dashboard stats
-app.get('/api/dashboard', (req, res) => {
+app.get('/api/dashboard', async (req, res) => {
     const { fecha } = getLocalTime();
     
-    db.serialize(() => {
-        let totalWorkers = 0;
-        let attendanceToday = 0;
-        let workersPresent = 0;
-        
-        db.get(`SELECT COUNT(*) as count FROM workers`, (err, row) => {
-            if (!err) totalWorkers = row.count;
-            
-            db.get(`SELECT COUNT(*) as count FROM attendance WHERE fecha = ?`, [fecha], (err, row) => {
-                if (!err) attendanceToday = row.count;
-                
-                db.get(`
-                    SELECT COUNT(*) as count 
-                    FROM (
-                        SELECT worker_dni, tipo, 
-                               ROW_NUMBER() OVER(PARTITION BY worker_dni ORDER BY timestamp DESC) as rn 
-                        FROM attendance 
-                        WHERE fecha = ?
-                    ) 
-                    WHERE rn = 1 AND tipo = 'Entrada'
-                `, [fecha], (err, row) => {
-                    if (!err) workersPresent = row.count;
-                    
-                    res.json({ totalWorkers, attendanceToday, workersPresent });
-                });
-            });
+    try {
+        const totalWorkersRes = await db.execute(`SELECT COUNT(*) as count FROM workers`);
+        const totalWorkers = Number(totalWorkersRes.rows[0]?.count || 0);
+
+        const attendanceTodayRes = await db.execute({
+            sql: `SELECT COUNT(*) as count FROM attendance WHERE fecha = ?`,
+            args: [fecha]
         });
-    });
+        const attendanceToday = Number(attendanceTodayRes.rows[0]?.count || 0);
+
+        const workersPresentRes = await db.execute({
+            sql: `
+                SELECT COUNT(*) as count 
+                FROM (
+                    SELECT worker_dni, tipo, 
+                            ROW_NUMBER() OVER(PARTITION BY worker_dni ORDER BY timestamp DESC) as rn 
+                    FROM attendance 
+                    WHERE fecha = ?
+                ) 
+                WHERE rn = 1 AND tipo = 'Entrada'
+            `,
+            args: [fecha]
+        });
+        const workersPresent = Number(workersPresentRes.rows[0]?.count || 0);
+
+        res.json({ totalWorkers, attendanceToday, workersPresent });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
 });
 
 function getLocalIP() {
