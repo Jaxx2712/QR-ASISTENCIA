@@ -99,11 +99,13 @@ initDB();
 
 function getLocalTime() {
     const now = new Date();
-    const options = { timeZone: 'America/Lima' };
+    const options = { timeZone: 'America/Caracas' };
     const fecha = now.toLocaleDateString('en-CA', options); // YYYY-MM-DD
     const hora = now.toLocaleTimeString('en-GB', options);   // HH:MM:SS
     return { fecha, hora };
 }
+
+
 
 function formatTime12h(timeStr) {
     if (!timeStr) return '';
