@@ -156,6 +156,13 @@ body {
     box-shadow: 0 4px 14px rgba(16, 185, 129, 0.45);
 }
 
+.nav-item[href="reportes.html"].active,
+.nav-item.nav-reportes.active {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: white;
+    box-shadow: 0 4px 14px rgba(245, 158, 11, 0.45);
+}
+
 .sidebar-footer {
     padding: 24px;
     text-align: center;
@@ -979,5 +986,280 @@ input[type="file"]::file-selector-button:hover {
     }
     .mc-header {
         font-size: 0.6rem;
+    }
+}
+
+/* ==========================================================================
+   Reporte Diario (Estilo Excel Exacto)
+   ========================================================================== */
+.report-page-container {
+    padding: 24px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.report-header-banner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.report-title-group h2 {
+    font-size: 1.5rem;
+    color: var(--dark);
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.report-title-group p {
+    color: var(--text-light);
+    font-size: 0.9rem;
+}
+
+.report-toolbar {
+    background: white;
+    padding: 16px 20px;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+.report-date-filter {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.report-date-filter label {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--dark);
+}
+
+.report-date-input {
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 0.95rem;
+    color: var(--dark);
+    background: #f8fafc;
+    transition: var(--transition);
+}
+
+.report-date-input:focus {
+    outline: none;
+    border-color: #f59e0b;
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
+}
+
+.report-quick-btn {
+    padding: 8px 14px;
+    background: #f1f5f9;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--dark);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.report-quick-btn:hover {
+    background: #e2e8f0;
+}
+
+.report-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.btn-excel {
+    background: linear-gradient(135deg, #107c41, #0c5c30);
+    color: white;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 20px;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    font-size: 0.95rem;
+    text-decoration: none;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 4px 12px rgba(16, 124, 65, 0.3);
+    transition: all 0.2s ease;
+}
+
+.btn-excel:hover {
+    background: linear-gradient(135deg, #158a49, #0f6c38);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(16, 124, 65, 0.4);
+    color: white;
+}
+
+.btn-excel:active {
+    transform: translateY(0);
+}
+
+.report-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.report-stat-card {
+    background: white;
+    padding: 18px 20px;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.report-stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    flex-shrink: 0;
+}
+
+.report-stat-icon.blue { background: #eff6ff; color: #3b82f6; }
+.report-stat-icon.green { background: #ecfdf5; color: #10b981; }
+.report-stat-icon.orange { background: #fffbeb; color: #f59e0b; }
+
+.report-stat-info h4 {
+    font-size: 0.8rem;
+    color: var(--text-light);
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.report-stat-info p {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--dark);
+    margin: 0;
+}
+
+/* Card y Tabla estilo Excel */
+.report-preview-card {
+    background: white;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    padding: 24px;
+    overflow: hidden;
+}
+
+.report-preview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.report-preview-header h3 {
+    font-size: 1.1rem;
+    color: var(--dark);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.table-responsive-excel {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 10px 0;
+}
+
+.excel-sheet-table {
+    border-collapse: collapse;
+    width: 100%;
+    max-width: 820px;
+    margin: 0 auto;
+    background: #ffffff;
+    font-family: 'Calibri', 'Inter', -apple-system, sans-serif;
+}
+
+.excel-sheet-table th,
+.excel-sheet-table td {
+    border: 1px solid #000000;
+    text-align: center;
+    vertical-align: middle;
+    padding: 8px 14px;
+    color: #000000;
+    font-size: 0.95rem;
+    white-space: nowrap;
+}
+
+.excel-title-cell {
+    font-size: 1.05rem;
+    font-weight: 500;
+    background: #ffffff;
+    letter-spacing: 0.5px;
+    padding: 10px 14px !important;
+}
+
+.excel-header-cell {
+    font-weight: 500;
+    background: #ffffff;
+    font-size: 0.95rem;
+}
+
+.excel-data-row:hover {
+    background: #fbfbfb;
+}
+
+.excel-empty-row td {
+    height: 32px;
+    background: #ffffff;
+}
+
+@media (max-width: 768px) {
+    .report-page-container {
+        padding: 16px;
+    }
+    .report-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .report-actions {
+        width: 100%;
+    }
+    .btn-excel {
+        width: 100%;
+        justify-content: center;
+    }
+    .report-stats-grid {
+        grid-template-columns: 1fr;
+    }
+    .excel-sheet-table th,
+    .excel-sheet-table td {
+        padding: 6px 10px;
+        font-size: 0.85rem;
     }
 }

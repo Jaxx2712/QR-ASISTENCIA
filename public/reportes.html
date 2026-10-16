@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Reporte Diario de Asistencia - QR Asistencia</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+    <style>
+        .badge-day {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            border: 1px solid #fde68a;
+        }
+    </style>
+</head>
+<body>
+    <!-- Overlay for mobile drawer -->
+    <div class="overlay" onclick="closeSidebar()"></div>
+
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-brand">
+                    <i class="fa-solid fa-clipboard-list logo-icon" style="color: #f59e0b;"></i>
+                    <h2>QR Asistencia</h2>
+                </div>
+                <button class="sidebar-close-btn" onclick="closeSidebar()" aria-label="Cerrar menú">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="index.html" class="nav-item nav-dashboard">
+                    <i class="fa-solid fa-chart-line"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="generar.html" class="nav-item nav-generar">
+                    <i class="fa-solid fa-qrcode"></i>
+                    <span>Generar QR</span>
+                </a>
+                <a href="scanner.html" class="nav-item nav-scanner">
+                    <i class="fa-solid fa-camera"></i>
+                    <span>Escáner</span>
+                </a>
+                <a href="reportes.html" class="nav-item active nav-reportes">
+                    <i class="fa-solid fa-clipboard-list"></i>
+                    <span>Reporte Diario</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <p>v2.0</p>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Top Bar -->
+            <header class="top-bar">
+                <div class="top-bar-left">
+                    <button class="menu-toggle" onclick="toggleSidebar()">
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
+                    <h1 class="page-title">Reporte Diario</h1>
+                </div>
+                <div class="top-bar-right">
+                    <div class="clock" id="clock">
+                        <!-- Clock injected via JS -->
+                    </div>
+                    <div class="user-profile" onclick="alert('Configuración de cuenta (Próximamente)')">
+                        <div class="user-avatar-small"><i class="fa-solid fa-user"></i></div>
+                        <span>Administrador</span>
+                        <i class="fa-solid fa-chevron-down" style="font-size: 12px; margin-left: 4px; color: #64748b;"></i>
+                    </div>
+                </div>
+            </header>
+
+            <div class="report-page-container">
+                <!-- Header Banner -->
+                <div class="report-header-banner">
+                    <div class="report-title-group">
+                        <h2><i class="fa-solid fa-calendar-day" style="color: #f59e0b;"></i> Asistencia Diaria</h2>
+                        <p>Lista generada cada 24 horas (00:00 - 23:59). Registro de hora de entrada y hora de salida descargable en Excel.</p>
+                    </div>
+                </div>
+
+                <!-- Controls & Toolbar -->
+                <div class="report-toolbar">
+                    <div class="report-date-filter">
+                        <label for="reportDate"><i class="fa-regular fa-calendar" style="color: #f59e0b;"></i> Fecha:</label>
+                        <input type="date" id="reportDate" class="report-date-input" onchange="loadDailyReport()">
+                        <button type="button" class="report-quick-btn" onclick="setTodayDate()">
+                            <i class="fa-solid fa-calendar-check"></i> Hoy
+                        </button>
+                        <button type="button" class="report-quick-btn" onclick="loadDailyReport()">
+                            <i class="fa-solid fa-rotate"></i> Actualizar
+                        </button>
+                    </div>
+                    <div class="report-actions">
+                        <button id="btnDownloadExcel" class="btn-excel" onclick="downloadExcelReport()">
+                            <i class="fa-solid fa-file-excel"></i> Descargar Excel
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Mini Summary Stats -->
+                <div class="report-stats-grid">
+                    <div class="report-stat-card">
+                        <div class="report-stat-icon blue">
+                            <i class="fa-solid fa-users"></i>
+                        </div>
+                        <div class="report-stat-info">
+                            <h4>Asistieron Hoy</h4>
+                            <p id="statTotalAttended">0</p>
+                        </div>
+                    </div>
+                    <div class="report-stat-card">
+                        <div class="report-stat-icon green">
+                            <i class="fa-solid fa-user-check"></i>
+                        </div>
+                        <div class="report-stat-info">
+                            <h4>En Sitio (Presentes)</h4>
+                            <p id="statPresent">0</p>
+                        </div>
+                    </div>
+                    <div class="report-stat-card">
+                        <div class="report-stat-icon orange">
+                            <i class="fa-solid fa-door-open"></i>
+                        </div>
+                        <div class="report-stat-info">
+                            <h4>Salidas Registradas</h4>
+                            <p id="statExited">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Excel Preview Card -->
+                <div class="report-preview-card">
+                    <div class="report-preview-header">
+                        <h3><i class="fa-solid fa-table-cells" style="color: #107c41;"></i> Hoja de Asistencia</h3>
+                        <span id="badgeDiaTitle" class="badge-day">Dia ...</span>
+                    </div>
+
+                    <div class="table-responsive-excel">
+                        <table class="excel-sheet-table" id="excelSheetTable">
+                            <thead>
+                                <tr class="excel-title-row">
+                                    <th colspan="4" id="excelTableTitle" class="excel-title-cell">Dia ...</th>
+                                </tr>
+                                <tr class="excel-header-row">
+                                    <th class="excel-header-cell">DNI</th>
+                                    <th class="excel-header-cell">Nombre</th>
+                                    <th class="excel-header-cell">hora de entrada</th>
+                                    <th class="excel-header-cell">hora de salida</th>
+                                </tr>
+                            </thead>
+                            <tbody id="excelTableBody">
+                                <!-- Filas inyectadas via JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- SheetJS for local fallback if needed -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="js/reports.js"></script>
+</body>
+</html>
+

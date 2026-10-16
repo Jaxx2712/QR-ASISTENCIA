@@ -3,6 +3,7 @@ const { createClient } = require('@libsql/client');
 require('dotenv').config();
 const path = require('path');
 const os = require('os');
+const ExcelJS = require('exceljs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -57,7 +58,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Database setup con Turso / LibSQL
 const db = createClient({
-    url: process.env.TURSO_DATABASE_URL,
+    url: process.env.TURSO_DATABASE_URL || 'file:asistencia.db',
     authToken: process.env.TURSO_AUTH_TOKEN,
 });
 
@@ -102,6 +103,18 @@ function getLocalTime() {
     const fecha = now.toLocaleDateString('en-CA', options); // YYYY-MM-DD
     const hora = now.toLocaleTimeString('en-GB', options);   // HH:MM:SS
     return { fecha, hora };
+}
+
+function formatTime12h(timeStr) {
+    if (!timeStr) return '';
+    const parts = timeStr.split(':');
+    let hours = parseInt(parts[0], 10);
+    const minutes = parts[1] || '00';
+    if (isNaN(hours)) return timeStr;
+    const ampm = hours >= 12 ? 'p. m.' : 'a. m.';
+    hours = hours % 12;
+    if (hours === 0) hours = 12;
+    return `${hours}:${minutes} ${ampm}`;
 }
 
 // Routes
@@ -299,6 +312,164 @@ app.get('/api/dashboard', async (req, res) => {
         res.json({ totalWorkers, attendanceToday, workersPresent });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// GET /api/reports/daily - Daily attendance report (00:00 - 23:59)
+app.get('/api/reports/daily', async (req, res) => {
+    let fecha = req.query.fecha;
+    if (!fecha) {
+        fecha = getLocalTime().fecha;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+        return res.status(400).json({ success: false, message: 'Formato de fecha inválido (YYYY-MM-DD).' });
+    }
+
+    try {
+        const result = await db.execute({
+            sql: `
+                SELECT 
+                    w.dni,
+                    w.nombre,
+                    MIN(CASE WHEN a.tipo = 'Entrada' THEN a.hora END) as hora_entrada,
+                    MAX(CASE WHEN a.tipo = 'Salida' THEN a.hora END) as hora_salida
+                FROM attendance a
+                JOIN workers w ON a.worker_dni = w.dni
+                WHERE a.fecha = ?
+                GROUP BY w.dni, w.nombre
+                ORDER BY hora_entrada ASC, w.nombre ASC
+            `,
+            args: [fecha]
+        });
+
+        const dayNumber = parseInt(fecha.split('-')[2], 10);
+        const records = result.rows.map(row => ({
+            dni: row.dni,
+            nombre: row.nombre,
+            hora_entrada: row.hora_entrada,
+            hora_salida: row.hora_salida,
+            hora_entrada_fmt: formatTime12h(row.hora_entrada),
+            hora_salida_fmt: formatTime12h(row.hora_salida)
+        }));
+
+        res.json({
+            success: true,
+            fecha,
+            dia: dayNumber,
+            titulo: `Dia ${dayNumber}`,
+            records
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// GET /api/reports/daily/download - Download daily attendance report formatted as Excel (.xlsx) matching exact specification
+app.get('/api/reports/daily/download', async (req, res) => {
+    let fecha = req.query.fecha;
+    if (!fecha) {
+        fecha = getLocalTime().fecha;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+        return res.status(400).send('Formato de fecha inválido (YYYY-MM-DD).');
+    }
+
+    try {
+        const result = await db.execute({
+            sql: `
+                SELECT 
+                    w.dni,
+                    w.nombre,
+                    MIN(CASE WHEN a.tipo = 'Entrada' THEN a.hora END) as hora_entrada,
+                    MAX(CASE WHEN a.tipo = 'Salida' THEN a.hora END) as hora_salida
+                FROM attendance a
+                JOIN workers w ON a.worker_dni = w.dni
+                WHERE a.fecha = ?
+                GROUP BY w.dni, w.nombre
+                ORDER BY hora_entrada ASC, w.nombre ASC
+            `,
+            args: [fecha]
+        });
+
+        const dayNumber = parseInt(fecha.split('-')[2], 10);
+        const records = result.rows.map(row => ({
+            dni: row.dni,
+            nombre: row.nombre,
+            hora_entrada_fmt: formatTime12h(row.hora_entrada),
+            hora_salida_fmt: formatTime12h(row.hora_salida)
+        }));
+
+        const wb = new ExcelJS.Workbook();
+        wb.creator = 'QR Asistencia';
+        wb.created = new Date();
+        const ws = wb.addWorksheet(`Dia ${dayNumber}`);
+
+        // Format definitions matching exact spreadsheet specifications
+        const fontNormal = { name: 'Calibri', size: 11, bold: false };
+        const centerAlign = { horizontal: 'center', vertical: 'middle' };
+        const thinBorder = {
+            top: { style: 'thin', color: { argb: 'FF000000' } },
+            left: { style: 'thin', color: { argb: 'FF000000' } },
+            bottom: { style: 'thin', color: { argb: 'FF000000' } },
+            right: { style: 'thin', color: { argb: 'FF000000' } }
+        };
+
+        // Row 1: Merged Title "Dia X"
+        ws.mergeCells('A1:D1');
+        const titleCell = ws.getCell('A1');
+        titleCell.value = `Dia ${dayNumber}`;
+        titleCell.alignment = centerAlign;
+        titleCell.font = fontNormal;
+
+        // Row 2: Headers
+        const headers = ['DNI', 'Nombre', 'hora de entrada', 'hora de salida'];
+        const headerRow = ws.getRow(2);
+        headers.forEach((h, i) => {
+            const cell = headerRow.getCell(i + 1);
+            cell.value = h;
+            cell.alignment = centerAlign;
+            cell.font = fontNormal;
+        });
+
+        // Rows 3+: Worker Data
+        records.forEach((rec, idx) => {
+            const row = ws.getRow(3 + idx);
+            row.getCell(1).value = rec.dni;
+            row.getCell(2).value = rec.nombre;
+            row.getCell(3).value = rec.hora_entrada_fmt || '';
+            row.getCell(4).value = rec.hora_salida_fmt || '';
+            for (let c = 1; c <= 4; c++) {
+                row.getCell(c).alignment = centerAlign;
+                row.getCell(c).font = fontNormal;
+            }
+        });
+
+        // Grid lines matching image: at least 15 rows formatted with thin borders
+        const totalRows = Math.max(15, records.length + 2);
+        for (let r = 1; r <= totalRows; r++) {
+            for (let c = 1; c <= 4; c++) {
+                ws.getCell(r, c).border = thinBorder;
+                if (r > 2 + records.length) {
+                    ws.getCell(r, c).alignment = centerAlign;
+                    ws.getCell(r, c).font = fontNormal;
+                }
+            }
+        }
+
+        // Set optimal column widths
+        ws.columns = [
+            { width: 16 },
+            { width: 26 },
+            { width: 22 },
+            { width: 22 }
+        ];
+
+        const buffer = await wb.xlsx.writeBuffer();
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="Reporte_Dia_${dayNumber}_${fecha}.xlsx"`);
+        res.send(buffer);
+    } catch (err) {
+        res.status(500).send('Error al generar el reporte de Excel: ' + err.message);
     }
 });
 
