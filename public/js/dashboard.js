@@ -440,29 +440,23 @@ async function deleteWorker(dni) {
 }
 
 // Sidebar toggle for mobile & tablet
-function toggleSidebar() {
+function toggleSidebar(force) {
     const sidebar = document.querySelector('.sidebar');
     const overlay = document.querySelector('.overlay');
-    if (sidebar) sidebar.classList.toggle('active');
-    if (overlay) overlay.classList.toggle('active');
+    if (!sidebar) return;
+    
+    const shouldOpen = (typeof force === 'boolean') ? force : !sidebar.classList.contains('active');
+    if (shouldOpen) {
+        sidebar.classList.add('active');
+        if (overlay) overlay.classList.add('active');
+    } else {
+        sidebar.classList.remove('active');
+        if (overlay) overlay.classList.remove('active');
+    }
 }
 window.toggleSidebar = toggleSidebar;
 
-// Bind menu-toggle and overlay click events
-document.addEventListener('DOMContentLoaded', () => {
-    const menuBtn = document.querySelector('.menu-toggle');
-    const overlay = document.querySelector('.overlay');
-    if (menuBtn) {
-        menuBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            toggleSidebar();
-        });
-    }
-    if (overlay) {
-        overlay.addEventListener('click', (e) => {
-            e.preventDefault();
-            toggleSidebar();
-        });
-    }
-});
+function closeSidebar() {
+    toggleSidebar(false);
+}
+window.closeSidebar = closeSidebar;

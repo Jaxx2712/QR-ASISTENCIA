@@ -11,24 +11,29 @@
 <body>
     <div class="app-container">
         <!-- Mobile Overlay -->
-        <div class="overlay" onclick="toggleSidebar()"></div>
+        <div class="overlay" onclick="closeSidebar()"></div>
 
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-header">
-                <i class="fa-solid fa-qrcode logo-icon"></i>
-                <h2>QR Asistencia</h2>
+                <div class="sidebar-brand">
+                    <i class="fa-solid fa-qrcode logo-icon"></i>
+                    <h2>QR Asistencia</h2>
+                </div>
+                <button class="sidebar-close-btn" onclick="closeSidebar()" aria-label="Cerrar menú">
+                    <i class="fa-solid fa-times"></i>
+                </button>
             </div>
             <nav class="sidebar-nav">
-                <a href="index.html" class="nav-item active">
+                <a href="index.html" class="nav-item active nav-dashboard">
                     <i class="fa-solid fa-chart-line"></i>
                     <span>Dashboard</span>
                 </a>
-                <a href="generar.html" class="nav-item">
+                <a href="generar.html" class="nav-item nav-generar">
                     <i class="fa-solid fa-qrcode"></i>
                     <span>Generar QR</span>
                 </a>
-                <a href="scanner.html" class="nav-item">
+                <a href="scanner.html" class="nav-item nav-scanner">
                     <i class="fa-solid fa-camera"></i>
                     <span>Escáner</span>
                 </a>

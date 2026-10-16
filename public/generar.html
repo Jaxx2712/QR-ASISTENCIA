@@ -174,22 +174,27 @@
     </style>
 </head>
 <body>
-    <div class="overlay" onclick="toggleSidebar()"></div>
+    <div class="overlay" onclick="closeSidebar()"></div>
     <aside class="sidebar">
         <div class="sidebar-header">
-            <i class="fas fa-qrcode logo-icon"></i>
-            <h2>QR Asistencia</h2>
+            <div class="sidebar-brand">
+                <i class="fas fa-qrcode logo-icon" style="color: #8b5cf6;"></i>
+                <h2>QR Asistencia</h2>
+            </div>
+            <button class="sidebar-close-btn" onclick="closeSidebar()" aria-label="Cerrar menú">
+                <i class="fas fa-times"></i>
+            </button>
         </div>
         <nav class="sidebar-nav">
-            <a href="index.html" class="nav-item">
+            <a href="index.html" class="nav-item nav-dashboard">
                 <i class="fas fa-chart-line"></i>
                 <span>Dashboard</span>
             </a>
-            <a href="generar.html" class="nav-item active">
+            <a href="generar.html" class="nav-item active nav-generar">
                 <i class="fas fa-qrcode"></i>
                 <span>Generar QR</span>
             </a>
-            <a href="scanner.html" class="nav-item">
+            <a href="scanner.html" class="nav-item nav-scanner">
                 <i class="fas fa-camera"></i>
                 <span>Escáner</span>
             </a>
