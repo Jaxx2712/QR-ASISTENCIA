@@ -439,8 +439,30 @@ async function deleteWorker(dni) {
     }
 }
 
-// Sidebar toggle for mobile
+// Sidebar toggle for mobile & tablet
 function toggleSidebar() {
-    document.querySelector('.sidebar').classList.toggle('active');
-    document.querySelector('.overlay').classList.toggle('active');
+    const sidebar = document.querySelector('.sidebar');
+    const overlay = document.querySelector('.overlay');
+    if (sidebar) sidebar.classList.toggle('active');
+    if (overlay) overlay.classList.toggle('active');
 }
+window.toggleSidebar = toggleSidebar;
+
+// Bind menu-toggle and overlay click events
+document.addEventListener('DOMContentLoaded', () => {
+    const menuBtn = document.querySelector('.menu-toggle');
+    const overlay = document.querySelector('.overlay');
+    if (menuBtn) {
+        menuBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleSidebar();
+        });
+    }
+    if (overlay) {
+        overlay.addEventListener('click', (e) => {
+            e.preventDefault();
+            toggleSidebar();
+        });
+    }
+});
