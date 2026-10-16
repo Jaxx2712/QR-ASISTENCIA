@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Asistencia Pro - Generar QR</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+    <style>
+        .badge-card {
+            width: 300px;
+            height: 450px;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            margin: 20px auto;
+            position: relative;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            border: 1px solid #e2e8f0;
+        }
+        .badge-header {
+            background: linear-gradient(90deg, #1e3a5f 0%, #2d5a8e 100%);
+            height: 80px;
+            color: white;
+            text-align: center;
+            padding-top: 15px;
+        }
+        .badge-empresa {
+            font-size: 18px;
+            font-weight: 700;
+            margin: 0;
+            letter-spacing: 1px;
+        }
+        .badge-subtitle {
+            font-size: 10px;
+            opacity: 0.8;
+            margin-top: 5px;
+        }
+        .badge-avatar-container {
+            position: absolute;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 70px;
+            height: 70px;
+            background: white;
+            border-radius: 50%;
+            padding: 4px;
+        }
+        .badge-avatar {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 32px;
+        }
+        .badge-body {
+            padding-top: 70px;
+            text-align: center;
+        }
+        .badge-nombre {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1e293b;
+            margin: 0;
+        }
+        .badge-cargo {
+            font-size: 13px;
+            color: #64748b;
+            margin: 5px 0 0 0;
+        }
+        .badge-dni {
+            font-size: 12px;
+            color: #94a3b8;
+            margin: 3px 0 15px 0;
+        }
+        .badge-qr-container {
+            border-top: 1px solid #e2e8f0;
+            padding-top: 15px;
+        }
+        .badge-footer {
+            font-size: 9px;
+            color: #94a3b8;
+            margin-top: 10px;
+        }
+        .notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+        .notification.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        .notification.success { background: #10b981; }
+        .notification.error { background: #ef4444; }
+        
+        .card {
+            background: #fff;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        @media(max-width: 768px) {
+            .form-grid { grid-template-columns: 1fr; }
+        }
+        .form-group { margin-bottom: 15px; }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #334155;
+        }
+        .form-control {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 5px;
+            font-family: inherit;
+        }
+        .form-control:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-family: inherit;
+        }
+        .btn-primary { background: #1e3a5f; color: white; }
+        .btn-primary:hover { background: #2d5a8e; }
+        .btn-secondary { background: #e2e8f0; color: #475569; }
+        .btn-secondary:hover { background: #cbd5e1; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        th { font-weight: 600; color: #475569; }
+        .btn-icon { background: none; border: none; color: #3b82f6; cursor: pointer; font-size: 16px; }
+        .btn-icon:hover { color: #2563eb; }
+    </style>
+</head>
+<body>
+    <div class="overlay" onclick="toggleSidebar()"></div>
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <i class="fas fa-qrcode logo-icon"></i>
+            <h2>QR Asistencia</h2>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="index.html" class="nav-item">
+                <i class="fas fa-chart-line"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="generar.html" class="nav-item active">
+                <i class="fas fa-qrcode"></i>
+                <span>Generar QR</span>
+            </a>
+            <a href="scanner.html" class="nav-item">
+                <i class="fas fa-camera"></i>
+                <span>Escáner</span>
+            </a>
+        </nav>
+        <div class="sidebar-footer">
+            <p>v2.0</p>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <header class="top-bar">
+            <div class="top-bar-left">
+                <button class="menu-toggle" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <h1 class="page-title">Generar QR</h1>
+            </div>
+            <div class="top-bar-right">
+                <div class="user-profile" onclick="alert('Configuración de cuenta (Próximamente)')">
+                    <div class="user-avatar-small"><i class="fas fa-user"></i></div>
+                    <span>Administrador</span>
+                    <i class="fas fa-chevron-down" style="font-size: 12px; margin-left: 4px; color: #64748b;"></i>
+                </div>
+            </div>
+        </header>
+
+        <div style="padding: 20px; max-width: 1000px; margin: 0 auto;">
+            <div class="card">
+                <h2><i class="fas fa-user-plus"></i> Registrar Nuevo Trabajador</h2>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="workerDni">DNI *</label>
+                        <input type="text" id="workerDni" class="form-control" placeholder="Ej: 12345678" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="workerName">Nombre Completo *</label>
+                        <input type="text" id="workerName" class="form-control" placeholder="Ej: Juan Carlos Pérez López" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="workerCargo">Cargo (Opcional)</label>
+                        <input type="text" id="workerCargo" class="form-control" placeholder="Ej: Operario, Ingeniero...">
+                    </div>
+                    <div class="form-group">
+                        <label for="workerEmpresa">Empresa (Opcional)</label>
+                        <input type="text" id="workerEmpresa" class="form-control" placeholder="Ej: Constructora ABC">
+                    </div>
+                    <div class="form-group">
+                        <label for="workerFoto">Foto de Perfil (Opcional)</label>
+                        <input type="file" id="workerFoto" class="form-control" accept="image/*">
+                    </div>
+                </div>
+                <button class="btn btn-primary" onclick="generateQR()">
+                    <i class="fas fa-qrcode"></i> Generar QR
+                </button>
+            </div>
+
+            <div id="badgePreview" class="card" style="display: none; text-align: center;">
+                <h2><i class="fas fa-check-circle" style="color: #10b981;"></i> QR Generado Exitosamente</h2>
+                
+                <div class="badge-card">
+                    <div class="badge-header">
+                        <p class="badge-empresa" id="badgeEmpresa">EMPRESA</p>
+                        <p class="badge-subtitle">CARNET DE ASISTENCIA</p>
+                    </div>
+                    <div class="badge-avatar-container">
+                        <div class="badge-avatar" id="badgeAvatar" style="overflow: hidden;"></div>
+                    </div>
+                    <div class="badge-body">
+                        <p class="badge-nombre" id="badgeNombre"></p>
+                        <p class="badge-cargo" id="badgeCargo"></p>
+                        <p class="badge-dni" id="badgeDni"></p>
+                        
+                        <div class="badge-qr-container">
+                            <canvas id="qrCanvas" style="width: 130px; height: 130px; border: 1px solid #e2e8f0; padding: 5px; border-radius: 5px; background: white;"></canvas>
+                            <p class="badge-footer">Escanea este código para<br>registrar asistencia</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 20px; display: flex; justify-content: center; gap: 10px;">
+                    <button class="btn btn-primary" onclick="downloadBadge()"><i class="fas fa-download"></i> Descargar Carnet</button>
+                    <button class="btn btn-secondary" onclick="resetForm()"><i class="fas fa-plus"></i> Generar Otro</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Trabajadores Registrados</h2>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>DNI</th>
+                                <th>Nombre</th>
+                                <th>Cargo</th>
+                                <th>Empresa</th>
+                                <th>Fecha Registro</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="workersTable">
+                            <!-- Populated via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="notification" class="notification"></div>
+    <script src="js/generator.js"></script>
+</body>
+</html>

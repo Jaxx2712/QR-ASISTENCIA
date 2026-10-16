@@ -1,0 +1,22 @@
+{
+  "name": "qr-asistencia-pro",
+  "version": "2.0.0",
+  "description": "Sistema profesional de control de asistencia por QR",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "qr",
+    "attendance",
+    "asistencia"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^5.2.1",
+    "sqlite3": "^6.0.1"
+  }
+}

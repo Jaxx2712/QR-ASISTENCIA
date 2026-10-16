@@ -1,0 +1,1 @@
+const sqlite3 = require('sqlite3'); const db = new sqlite3.Database('asistencia.db'); db.get("SELECT COUNT(*) as count FROM (SELECT worker_dni, tipo, ROW_NUMBER() OVER(PARTITION BY worker_dni ORDER BY timestamp DESC) as rn FROM attendance WHERE fecha = '2026-10-09') WHERE rn = 1 AND tipo = 'Entrada'", (err, row) => { console.log(err ? err : row); db.close(); })

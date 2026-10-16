@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Asistencia Pro - Dashboard</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Mobile Overlay -->
+        <div class="overlay" onclick="toggleSidebar()"></div>
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <i class="fa-solid fa-qrcode logo-icon"></i>
+                <h2>QR Asistencia</h2>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="index.html" class="nav-item active">
+                    <i class="fa-solid fa-chart-line"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="generar.html" class="nav-item">
+                    <i class="fa-solid fa-qrcode"></i>
+                    <span>Generar QR</span>
+                </a>
+                <a href="scanner.html" class="nav-item">
+                    <i class="fa-solid fa-camera"></i>
+                    <span>Escáner</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <p>v2.0</p>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Top Bar -->
+            <header class="top-bar">
+                <div class="top-bar-left">
+                    <button class="menu-toggle" onclick="toggleSidebar()">
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
+                    <h1 class="page-title">Dashboard</h1>
+                </div>
+                <div class="top-bar-right" style="display: flex; gap: 20px; align-items: center;">
+                    <div class="clock" id="clock">
+                        <!-- Clock injected via JS -->
+                    </div>
+                    <div class="user-profile" onclick="alert('Configuración de cuenta (Próximamente)')">
+                        <div class="user-avatar-small"><i class="fas fa-user"></i></div>
+                        <span>Administrador</span>
+                        <i class="fas fa-chevron-down" style="font-size: 12px; margin-left: 4px; color: #64748b;"></i>
+                    </div>
+                </div>
+            </header>
+
+            <div class="content-wrapper">
+                <!-- Stats Row -->
+                <section class="stats-grid">
+                    <div class="stat-card bg-blue-gradient">
+                        <div class="stat-icon">
+                            <i class="fa-solid fa-users"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="stat-total">0</h3>
+                            <p>Total Trabajadores</p>
+                        </div>
+                    </div>
+                    <div class="stat-card bg-green-gradient">
+                        <div class="stat-icon">
+                            <i class="fa-solid fa-clipboard-check"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="stat-asistencias">0</h3>
+                            <p>Asistencias Hoy</p>
+                        </div>
+                    </div>
+                    <div class="stat-card bg-purple-gradient">
+                        <div class="stat-icon">
+                            <i class="fa-solid fa-user-check"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="stat-presentes">0</h3>
+                            <p>Presentes Ahora</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Workers Section -->
+                <section class="workers-section">
+                    <div class="section-header">
+                        <h2>Trabajadores Registrados</h2>
+                        <div class="search-box">
+                            <i class="fa-solid fa-search"></i>
+                            <input type="text" id="searchInput" placeholder="Buscar por nombre o DNI..." onkeyup="filterWorkers(this.value)">
+                        </div>
+                    </div>
+                    
+                    <div class="workers-grid" id="workersGrid">
+                        <!-- Worker Cards injected via JS -->
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- Worker Detail Modal -->
+    <div class="modal-backdrop" id="workerModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-worker-info">
+                    <div class="modal-avatar" id="modalAvatar"></div>
+                    <div>
+                        <h2 id="modalWorkerName">Nombre Trabajador</h2>
+                        <p id="modalWorkerDni">DNI: 00000000 | Cargo: Puesto</p>
+                    </div>
+                </div>
+                <button class="close-btn" onclick="closeModal()">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="calendar-controls">
+                    <button class="icon-btn" onclick="prevMonth()">
+                        <i class="fa-solid fa-chevron-left"></i>
+                    </button>
+                    <h3 id="modalMonthName">Octubre 2025</h3>
+                    <button class="icon-btn" onclick="nextMonth()">
+                        <i class="fa-solid fa-chevron-right"></i>
+                    </button>
+                </div>
+                <div class="large-calendar">
+                    <div class="calendar-header-row">
+                        <span>Lun</span><span>Mar</span><span>Mié</span><span>Jue</span><span>Vie</span><span>Sáb</span><span>Dom</span>
+                    </div>
+                    <div class="calendar-grid-large" id="modalCalendarGrid">
+                        <!-- Large Calendar Cells injected via JS -->
+                    </div>
+                </div>
+                <div class="attendance-summary">
+                    <div class="summary-item">
+                        <span class="summary-label">Días Asistidos:</span>
+                        <span class="summary-value" id="summaryAttended">0</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Días Laborables:</span>
+                        <span class="summary-value" id="summaryTotal">0</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Porcentaje:</span>
+                        <span class="summary-value" id="summaryPercentage">0%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/dashboard.js"></script>
+</body>
+</html>
