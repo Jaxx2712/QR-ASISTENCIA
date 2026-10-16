@@ -216,11 +216,11 @@
                 <div class="form-grid">
                     <div class="form-group">
                         <label for="workerDni">DNI *</label>
-                        <input type="text" id="workerDni" class="form-control" placeholder="Ej: 12345678" required>
+                        <input type="text" id="workerDni" class="form-control" placeholder="Ej: 12345678" required maxlength="8" pattern="\d{8}" inputmode="numeric" autocomplete="off">
                     </div>
                     <div class="form-group">
                         <label for="workerName">Nombre Completo *</label>
-                        <input type="text" id="workerName" class="form-control" placeholder="Ej: Juan Carlos Pérez López" required>
+                        <input type="text" id="workerName" class="form-control" placeholder="Ej: Juan Carlos Pérez López" required maxlength="100" autocomplete="off">
                     </div>
                     <div class="form-group">
                         <label for="workerCargo">Cargo (Opcional)</label>

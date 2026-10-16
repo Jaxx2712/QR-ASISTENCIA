@@ -272,6 +272,14 @@ function resetForm() {
     document.getElementById('workerDni').focus();
 }
 
+// Sanitize string to prevent XSS
+function escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
 async function loadWorkersList() {
     try {
         const res = await fetch('/api/workers');
@@ -281,15 +289,19 @@ async function loadWorkersList() {
         
         workers.forEach(w => {
             const date = new Date(w.created_at).toLocaleDateString('es-PE');
+            const safeDni = escapeHtml(w.dni);
+            const safeName = escapeHtml(w.nombre);
+            const safeCargo = escapeHtml(w.cargo) || '-';
+            const safeEmpresa = escapeHtml(w.empresa) || '-';
             tbody.innerHTML += `
                 <tr>
-                    <td>${w.dni}</td>
-                    <td>${w.nombre}</td>
-                    <td>${w.cargo || '-'}</td>
-                    <td>${w.empresa || '-'}</td>
+                    <td>${safeDni}</td>
+                    <td>${safeName}</td>
+                    <td>${safeCargo}</td>
+                    <td>${safeEmpresa}</td>
                     <td>${date}</td>
                     <td>
-                        <button class="btn-icon" onclick="regenerateBadge('${w.dni}')" title="Descargar carnet">
+                        <button class="btn-icon" onclick="regenerateBadge('${safeDni}')" title="Descargar carnet">
                             <i class="fas fa-download"></i>
                         </button>
                     </td>

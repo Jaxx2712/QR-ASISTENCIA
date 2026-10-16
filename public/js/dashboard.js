@@ -20,23 +20,25 @@ document.addEventListener('DOMContentLoaded', () => {
 // Clock
 function startClock() {
     const clockEl = document.getElementById('clock');
+    if (!clockEl) return;
     
     const updateTime = () => {
         const now = new Date();
-        const options = { 
-            weekday: 'long', 
-            year: 'numeric', 
-            month: 'long', 
+        const dateOpts = { 
+            weekday: 'short', 
             day: 'numeric',
+            month: 'short',
+            year: 'numeric'
+        };
+        const timeOpts = {
             hour: '2-digit', 
             minute: '2-digit', 
             second: '2-digit' 
         };
-        // Format: "jueves, 9 de octubre de 2025 - 10:30:45"
-        let dateStr = now.toLocaleDateString('es-ES', options);
-        // Capitalize first letter of weekday and month if desired, standard format is usually lowercase in ES but let's make it look nicer
+        let dateStr = now.toLocaleDateString('es-ES', dateOpts);
         dateStr = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
-        clockEl.textContent = dateStr;
+        const timeStr = now.toLocaleTimeString('es-ES', timeOpts);
+        clockEl.innerHTML = `<span class="clock-date">${dateStr}</span> <span class="clock-time">${timeStr}</span>`;
     };
     
     updateTime();

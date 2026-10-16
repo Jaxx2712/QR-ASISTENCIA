@@ -162,12 +162,26 @@ body {
 }
 
 .clock {
-    font-size: 0.95rem;
+    font-size: 0.85rem;
     color: var(--text-light);
     font-weight: 500;
     background: var(--bg);
     padding: 8px 16px;
     border-radius: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.clock-date {
+    color: var(--text);
+    font-weight: 600;
+}
+
+.clock-time {
+    color: var(--text-light);
+    font-weight: 400;
 }
 
 /* User Profile in Top Bar */
@@ -699,11 +713,33 @@ input[type="file"]::file-selector-button:hover {
     pointer-events: auto;
 }
 
+/* Tablet breakpoint */
 @media (max-width: 992px) {
     .content-wrapper { padding: 24px; }
-    .stats-grid { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+    .stats-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+    .workers-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+
+    .clock {
+        font-size: 0.8rem;
+        padding: 6px 12px;
+        max-width: 260px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .user-profile span {
+        display: none;
+    }
+    .user-profile .fa-chevron-down {
+        display: none;
+    }
+    .user-profile {
+        padding: 6px;
+    }
 }
 
+/* Mobile breakpoint */
 @media (max-width: 768px) {
     .sidebar {
         transform: translateX(-100%);
@@ -718,19 +754,156 @@ input[type="file"]::file-selector-button:hover {
         display: block;
     }
     .top-bar {
-        padding: 0 16px;
+        padding: 0 12px;
+        height: 56px;
+    }
+    .page-title {
+        font-size: 1.1rem;
     }
     .content-wrapper {
-        padding: 16px;
+        padding: 12px;
     }
     .search-box {
         width: 100%;
     }
+
+    /* Clock: show only time on mobile */
+    .clock {
+        font-size: 0.75rem;
+        padding: 5px 10px;
+        max-width: 180px;
+    }
+
+    /* Stats cards */
+    .stats-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+        margin-bottom: 20px;
+    }
+    .stat-card {
+        padding: 16px;
+        gap: 14px;
+    }
+    .stat-icon {
+        width: 48px;
+        height: 48px;
+        font-size: 1.3rem;
+    }
+    .stat-info h3 {
+        font-size: 1.6rem;
+    }
+    .stat-info p {
+        font-size: 0.85rem;
+    }
+
+    /* Worker cards */
+    .workers-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+    .worker-card {
+        padding: 16px;
+    }
+    .btn-delete {
+        opacity: 1;
+    }
+
+    /* Calendar cells */
     .lc-cell {
         min-height: 60px;
         padding: 4px;
     }
     .lc-times {
         font-size: 0.65rem;
+    }
+
+    /* Modal */
+    .modal-content {
+        width: 95%;
+        max-height: 95vh;
+        border-radius: var(--radius-md);
+    }
+    .modal-header {
+        padding: 16px;
+    }
+    .modal-body {
+        padding: 16px;
+    }
+    .modal-avatar {
+        width: 44px;
+        height: 44px;
+        font-size: 1rem;
+    }
+    .modal-worker-info h2 {
+        font-size: 1rem;
+    }
+    .modal-worker-info p {
+        font-size: 0.8rem;
+    }
+    .calendar-header-row {
+        font-size: 0.75rem;
+        padding: 8px 0;
+    }
+    .attendance-summary {
+        flex-wrap: wrap;
+        gap: 16px;
+    }
+
+    /* User profile on mobile */
+    .user-profile span {
+        display: none;
+    }
+    .user-profile .fa-chevron-down {
+        display: none;
+    }
+    .user-profile {
+        padding: 6px;
+        border-radius: 50%;
+    }
+
+    /* Section header */
+    .section-header {
+        margin-bottom: 16px;
+    }
+    .section-header h2 {
+        font-size: 1.1rem;
+    }
+}
+
+/* Very small screens */
+@media (max-width: 480px) {
+    .top-bar {
+        height: 50px;
+        padding: 0 10px;
+    }
+    .page-title {
+        font-size: 1rem;
+    }
+    .top-bar-left {
+        gap: 10px;
+    }
+    .clock {
+        display: none;
+    }
+    .stats-grid {
+        gap: 10px;
+    }
+    .stat-card {
+        padding: 14px;
+        gap: 12px;
+    }
+    .stat-icon {
+        width: 42px;
+        height: 42px;
+        font-size: 1.1rem;
+    }
+    .stat-info h3 {
+        font-size: 1.4rem;
+    }
+    .mc-cell {
+        font-size: 0.65rem;
+    }
+    .mc-header {
+        font-size: 0.6rem;
     }
 }
