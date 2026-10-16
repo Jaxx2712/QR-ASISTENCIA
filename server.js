@@ -276,7 +276,7 @@ app.get('/api/dashboard', async (req, res) => {
         const totalWorkers = Number(totalWorkersRes.rows[0]?.count || 0);
 
         const attendanceTodayRes = await db.execute({
-            sql: `SELECT COUNT(*) as count FROM attendance WHERE fecha = ?`,
+            sql: `SELECT COUNT(DISTINCT worker_dni) as count FROM attendance WHERE fecha = ? AND tipo = 'Entrada'`,
             args: [fecha]
         });
         const attendanceToday = Number(attendanceTodayRes.rows[0]?.count || 0);
