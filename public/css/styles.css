@@ -147,6 +147,12 @@ body {
     gap: 16px;
 }
 
+.top-bar-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
 .menu-toggle {
     display: none;
     background: none;
@@ -883,6 +889,10 @@ input[type="file"]::file-selector-button:hover {
         gap: 10px;
     }
     .clock {
+        padding: 4px 10px;
+        font-size: 0.7rem;
+    }
+    .clock-date {
         display: none;
     }
     .stats-grid {
