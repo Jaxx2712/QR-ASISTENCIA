@@ -3,6 +3,7 @@ const { createClient } = require('@libsql/client');
 require('dotenv').config();
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 const ExcelJS = require('exceljs');
 
 const app = express();
@@ -89,7 +90,31 @@ async function initDB() {
             FOREIGN KEY(worker_dni) REFERENCES workers(dni)
         )`);
 
-        console.log('Connected to Turso database and initialized tables.');
+        // Users table for authentication & roles
+        await db.execute(`CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre TEXT NOT NULL,
+            dni TEXT UNIQUE NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            salt TEXT NOT NULL,
+            cargo TEXT NOT NULL CHECK(cargo IN ('Administrador','Supervisor')),
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
+
+        // Seed default administrator if users table is empty
+        const userCount = await db.execute(`SELECT COUNT(*) as count FROM users`);
+        if (Number(userCount.rows[0]?.count || 0) === 0) {
+            const salt = crypto.randomBytes(16).toString('hex');
+            const hash = crypto.scryptSync('admin123', salt, 64).toString('hex');
+            await db.execute({
+                sql: `INSERT INTO users (nombre, dni, email, password_hash, salt, cargo) VALUES (?, ?, ?, ?, ?, ?)`,
+                args: ['Administrador Principal', '11111111', 'admin@qrasistencia.com', hash, salt, 'Administrador']
+            });
+            console.log('Cuenta de Administrador inicial creada: admin@qrasistencia.com (DNI: 11111111 / Clave: admin123)');
+        }
+
+        console.log('Connected to database and initialized tables.');
     } catch (err) {
         console.error('Error initializing database:', err.message);
     }
@@ -99,13 +124,18 @@ initDB();
 
 function getLocalTime() {
     const now = new Date();
-    const options = { timeZone: 'America/Caracas' };
+    const tz = process.env.TIMEZONE || 'America/Caracas';
+    let options = {};
+    try {
+        Intl.DateTimeFormat(undefined, { timeZone: tz });
+        options = { timeZone: tz };
+    } catch (e) {
+        options = {};
+    }
     const fecha = now.toLocaleDateString('en-CA', options); // YYYY-MM-DD
     const hora = now.toLocaleTimeString('en-GB', options);   // HH:MM:SS
     return { fecha, hora };
 }
-
-
 
 function formatTime12h(timeStr) {
     if (!timeStr) return '';
@@ -118,6 +148,227 @@ function formatTime12h(timeStr) {
     if (hours === 0) hours = 12;
     return `${hours}:${minutes} ${ampm}`;
 }
+
+// Authentication Helpers & Sessions
+function hashPassword(password) {
+    const salt = crypto.randomBytes(16).toString('hex');
+    const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+    return { salt, hash };
+}
+
+function verifyPassword(password, salt, originalHash) {
+    try {
+        const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+        return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(originalHash, 'hex'));
+    } catch (e) {
+        return false;
+    }
+}
+
+// Active session store: token -> user session
+const activeSessions = new Map();
+
+function createSession(user) {
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days validity
+    activeSessions.set(token, {
+        userId: user.id,
+        nombre: user.nombre,
+        dni: user.dni,
+        email: user.email,
+        cargo: user.cargo,
+        expiresAt
+    });
+    return token;
+}
+
+function getSessionUser(req) {
+    const authHeader = req.headers['authorization'];
+    let token = null;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.substring(7);
+    } else if (req.query && req.query.token) {
+        token = req.query.token;
+    }
+    if (!token) return null;
+    const session = activeSessions.get(token);
+    if (!session) return null;
+    if (Date.now() > session.expiresAt) {
+        activeSessions.delete(token);
+        return null;
+    }
+    return session;
+}
+
+function requireAuth(req, res, next) {
+    const user = getSessionUser(req);
+    if (!user) {
+        return res.status(401).json({ success: false, message: 'No autorizado. Inicie sesión.' });
+    }
+    req.user = user;
+    next();
+}
+
+function requireAdmin(req, res, next) {
+    const user = getSessionUser(req);
+    if (!user) {
+        return res.status(401).json({ success: false, message: 'No autorizado. Inicie sesión.' });
+    }
+    if (user.cargo !== 'Administrador') {
+        return res.status(403).json({ success: false, message: 'Acceso restringido: Solo para Administradores.' });
+    }
+    req.user = user;
+    next();
+}
+
+// Auth Routes
+
+// POST /api/auth/register - Register a user (Administrador or Supervisor)
+app.post('/api/auth/register', async (req, res) => {
+    const { nombre, dni, email, password, cargo } = req.body;
+    
+    if (!nombre || !dni || !email || !password || !cargo) {
+        return res.status(400).json({ success: false, message: 'Todos los campos son obligatorios.' });
+    }
+
+    const cleanNombre = String(nombre).trim();
+    const cleanDni = String(dni).trim();
+    const cleanEmail = String(email).trim().toLowerCase();
+    const cleanCargo = String(cargo).trim();
+
+    if (!/^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]{3,60}$/.test(cleanNombre)) {
+        return res.status(400).json({ success: false, message: 'El nombre solo puede contener letras y espacios (mínimo 3 letras).' });
+    }
+
+    if (!/^\d{8}$/.test(cleanDni)) {
+        return res.status(400).json({ success: false, message: 'El DNI debe contener exactamente 8 números.' });
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+        return res.status(400).json({ success: false, message: 'Formato de correo electrónico inválido.' });
+    }
+
+    if (String(password).length < 6) {
+        return res.status(400).json({ success: false, message: 'La contraseña debe tener al menos 6 caracteres.' });
+    }
+
+    if (!['Administrador', 'Supervisor'].includes(cleanCargo)) {
+        return res.status(400).json({ success: false, message: 'El cargo debe ser Administrador o Supervisor.' });
+    }
+
+    try {
+        const existing = await db.execute({
+            sql: `SELECT dni, email FROM users WHERE dni = ? OR email = ?`,
+            args: [cleanDni, cleanEmail]
+        });
+
+        if (existing.rows.length > 0) {
+            const match = existing.rows[0];
+            if (match.dni === cleanDni) {
+                return res.status(409).json({ success: false, message: 'Ya existe un usuario con este DNI.' });
+            }
+            return res.status(409).json({ success: false, message: 'Ya existe un usuario con este correo electrónico.' });
+        }
+
+        const { salt, hash } = hashPassword(password);
+        const insertRes = await db.execute({
+            sql: `INSERT INTO users (nombre, dni, email, password_hash, salt, cargo) VALUES (?, ?, ?, ?, ?, ?)`,
+            args: [cleanNombre, cleanDni, cleanEmail, hash, salt, cleanCargo]
+        });
+
+        const userObj = {
+            id: Number(insertRes.lastInsertRowid || 0),
+            nombre: cleanNombre,
+            dni: cleanDni,
+            email: cleanEmail,
+            cargo: cleanCargo
+        };
+
+        const token = createSession(userObj);
+        res.json({
+            success: true,
+            message: 'Registro exitoso.',
+            token,
+            user: userObj
+        });
+    } catch (err) {
+        console.error('Error al registrar usuario:', err);
+        res.status(500).json({ success: false, message: 'Error interno al registrar usuario: ' + err.message });
+    }
+});
+
+// POST /api/auth/login - Login with DNI or Email
+app.post('/api/auth/login', async (req, res) => {
+    const { identifier, password } = req.body;
+    if (!identifier || !password) {
+        return res.status(400).json({ success: false, message: 'Por favor complete todos los campos.' });
+    }
+
+    const cleanIdentifier = String(identifier).trim().toLowerCase();
+
+    try {
+        const result = await db.execute({
+            sql: `SELECT * FROM users WHERE LOWER(email) = ? OR dni = ?`,
+            args: [cleanIdentifier, cleanIdentifier]
+        });
+
+        if (result.rows.length === 0) {
+            return res.status(401).json({ success: false, message: 'DNI/Correo o contraseña incorrectos.' });
+        }
+
+        const user = result.rows[0];
+        const isValid = verifyPassword(password, user.salt, user.password_hash);
+        if (!isValid) {
+            return res.status(401).json({ success: false, message: 'DNI/Correo o contraseña incorrectos.' });
+        }
+
+        const userObj = {
+            id: user.id,
+            nombre: user.nombre,
+            dni: user.dni,
+            email: user.email,
+            cargo: user.cargo
+        };
+
+        const token = createSession(userObj);
+        res.json({
+            success: true,
+            message: 'Inicio de sesión exitoso.',
+            token,
+            user: userObj
+        });
+    } catch (err) {
+        console.error('Error al iniciar sesión:', err);
+        res.status(500).json({ success: false, message: 'Error interno del servidor al iniciar sesión.' });
+    }
+});
+
+// GET /api/auth/me - Verify current session
+app.get('/api/auth/me', (req, res) => {
+    const user = getSessionUser(req);
+    if (!user) {
+        return res.status(401).json({ success: false, message: 'Sesión no válida o expirada.' });
+    }
+    res.json({
+        success: true,
+        user: {
+            nombre: user.nombre,
+            dni: user.dni,
+            email: user.email,
+            cargo: user.cargo
+        }
+    });
+});
+
+// POST /api/auth/logout - Logout
+app.post('/api/auth/logout', (req, res) => {
+    const authHeader = req.headers['authorization'];
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.substring(7);
+        activeSessions.delete(token);
+    }
+    res.json({ success: true, message: 'Sesión finalizada correctamente.' });
+});
 
 // Routes
 

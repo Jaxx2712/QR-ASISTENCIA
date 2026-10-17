@@ -1,6 +1,35 @@
 document.addEventListener('DOMContentLoaded', () => {
+    startClock();
     loadWorkersList();
 });
+
+// Live clock
+function startClock() {
+    const clockEl = document.getElementById('clock');
+    if (!clockEl) return;
+    
+    const updateTime = () => {
+        const now = new Date();
+        const dateOpts = { 
+            weekday: 'short', 
+            day: 'numeric', 
+            month: 'short', 
+            year: 'numeric' 
+        };
+        const timeOpts = { 
+            hour: '2-digit', 
+            minute: '2-digit', 
+            second: '2-digit' 
+        };
+        let dateStr = now.toLocaleDateString('es-ES', dateOpts);
+        dateStr = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+        const timeStr = now.toLocaleTimeString('es-ES', timeOpts);
+        clockEl.innerHTML = `<span class="clock-date">${dateStr}</span> <span class="clock-time">${timeStr}</span>`;
+    };
+    
+    updateTime();
+    setInterval(updateTime, 1000);
+}
 
 async function generateQR() {
     const dni = document.getElementById('workerDni').value.trim();

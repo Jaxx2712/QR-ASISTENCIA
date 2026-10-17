@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+    <script src="js/auth.js"></script>
     <style>
         .badge-card {
             width: 300px;
@@ -217,7 +218,10 @@
                 <h1 class="page-title">Generar QR</h1>
             </div>
             <div class="top-bar-right">
-                <div class="user-profile" onclick="alert('Configuración de cuenta (Próximamente)')">
+                <div class="clock" id="clock">
+                    <!-- Clock injected via JS -->
+                </div>
+                <div class="user-profile">
                     <div class="user-avatar-small"><i class="fas fa-user"></i></div>
                     <span>Administrador</span>
                     <i class="fas fa-chevron-down" style="font-size: 12px; margin-left: 4px; color: #64748b;"></i>

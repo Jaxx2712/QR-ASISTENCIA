@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Acceso al Sistema - QR Asistencia</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="auth-wrapper">
+    <div class="auth-container">
+        <!-- Auth Header -->
+        <div class="auth-header">
+            <div class="auth-logo">
+                <i class="fa-solid fa-qrcode" style="color: #60a5fa;"></i>
+                <span>QR Asistencia</span>
+            </div>
+            <p>Sistema Profesional de Control de Asistencia</p>
+        </div>
+
+        <!-- Auth Tabs -->
+        <div class="auth-tabs">
+            <button type="button" class="auth-tab-btn active" id="tabLoginBtn" onclick="switchAuthTab('login')">
+                <i class="fa-solid fa-right-to-bracket"></i> Iniciar Sesión
+            </button>
+            <button type="button" class="auth-tab-btn" id="tabRegisterBtn" onclick="switchAuthTab('register')">
+                <i class="fa-solid fa-user-plus"></i> Crear Cuenta
+            </button>
+        </div>
+
+        <div class="auth-body">
+            <!-- Alert Message Box -->
+            <div id="authAlert" class="auth-alert"></div>
+
+            <!-- Login Form -->
+            <form id="formLogin" class="auth-form" onsubmit="handleLoginSubmit(event)">
+                <div class="form-group">
+                    <label for="loginIdentifier"><i class="fa-regular fa-envelope"></i> Correo electrónico o DNI</label>
+                    <input type="text" id="loginIdentifier" class="form-control" placeholder="ej. admin@qrasistencia.com o 11111111" required autofocus autocomplete="username">
+                </div>
+
+                <div class="form-group">
+                    <label for="loginPassword"><i class="fa-solid fa-lock"></i> Contraseña</label>
+                    <input type="password" id="loginPassword" class="form-control" placeholder="Ingresa tu contraseña" required autocomplete="current-password">
+                </div>
+
+                <button type="submit" id="btnLoginSubmit" class="auth-btn-submit">
+                    <i class="fa-solid fa-arrow-right-to-bracket"></i> Entrar al Sistema
+                </button>
+            </form>
+
+            <!-- Register Form -->
+            <form id="formRegister" class="auth-form" style="display: none;" onsubmit="handleRegisterSubmit(event)">
+                <div class="form-group">
+                    <label for="regNombre"><i class="fa-regular fa-user"></i> Nombre Completo</label>
+                    <input type="text" id="regNombre" class="form-control" placeholder="ej. Carlos Mendoza" required autocomplete="name">
+                </div>
+
+                <div class="form-group">
+                    <label for="regDni"><i class="fa-regular fa-id-card"></i> DNI (8 números)</label>
+                    <input type="text" id="regDni" class="form-control" placeholder="ej. 12345678" maxlength="8" pattern="[0-9]{8}" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="regEmail"><i class="fa-regular fa-envelope"></i> Correo Electrónico</label>
+                    <input type="email" id="regEmail" class="form-control" placeholder="ej. usuario@empresa.com" required autocomplete="email">
+                </div>
+
+                <div class="form-group">
+                    <label for="regPassword"><i class="fa-solid fa-lock"></i> Contraseña</label>
+                    <input type="password" id="regPassword" class="form-control" placeholder="Mínimo 6 caracteres" minlength="6" required autocomplete="new-password">
+                </div>
+
+                <div class="form-group">
+                    <label for="regCargo"><i class="fa-solid fa-shield-halved"></i> Cargo / Rol</label>
+                    <select id="regCargo" class="form-control" required style="padding: 10px; font-weight: 500;">
+                        <option value="Administrador">Administrador (Acceso total: Dashboard, QR, Reportes)</option>
+                        <option value="Supervisor">Supervisor (Acceso exclusivo a Escáner)</option>
+                    </select>
+                </div>
+
+                <button type="submit" id="btnRegisterSubmit" class="auth-btn-submit" style="background: linear-gradient(135deg, #2563eb, #1d4ed8);">
+                    <i class="fa-solid fa-user-plus"></i> Registrar Cuenta
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Auth Script -->
+    <script src="js/auth.js"></script>
+    <script>
+        function switchAuthTab(tab) {
+            const tabLoginBtn = document.getElementById('tabLoginBtn');
+            const tabRegisterBtn = document.getElementById('tabRegisterBtn');
+            const formLogin = document.getElementById('formLogin');
+            const formRegister = document.getElementById('formRegister');
+            hideAlert();
+
+            if (tab === 'register') {
+                tabLoginBtn.classList.remove('active');
+                tabRegisterBtn.classList.add('active');
+                formLogin.style.display = 'none';
+                formRegister.style.display = 'flex';
+                document.getElementById('regNombre').focus();
+            } else {
+                tabRegisterBtn.classList.remove('active');
+                tabLoginBtn.classList.add('active');
+                formRegister.style.display = 'none';
+                formLogin.style.display = 'flex';
+                document.getElementById('loginIdentifier').focus();
+            }
+        }
+
+        function showAlert(message, type = 'error') {
+            const alertBox = document.getElementById('authAlert');
+            alertBox.textContent = message;
+            alertBox.className = `auth-alert ${type}`;
+        }
+
+        function hideAlert() {
+            const alertBox = document.getElementById('authAlert');
+            alertBox.className = 'auth-alert';
+            alertBox.textContent = '';
+        }
+
+        // Login Handler
+        async function handleLoginSubmit(e) {
+            e.preventDefault();
+            hideAlert();
+            const identifier = document.getElementById('loginIdentifier').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            const btn = document.getElementById('btnLoginSubmit');
+
+            if (!identifier || !password) {
+                showAlert('Por favor ingresa tu DNI/Correo y contraseña.');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Verificando...';
+
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ identifier, password })
+                });
+
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    showAlert(data.message || 'Credenciales incorrectas.');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-arrow-right-to-bracket"></i> Entrar al Sistema';
+                    return;
+                }
+
+                // Save session
+                localStorage.setItem('qr_token', data.token);
+                localStorage.setItem('qr_user', JSON.stringify(data.user));
+
+                showAlert('Acceso concedido. Redirigiendo...', 'success');
+
+                setTimeout(() => {
+                    if (data.user.cargo === 'Supervisor') {
+                        window.location.replace('scanner.html');
+                    } else {
+                        window.location.replace('index.html');
+                    }
+                }, 500);
+
+            } catch (err) {
+                console.error('Error de login:', err);
+                showAlert('Error de conexión con el servidor.');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-arrow-right-to-bracket"></i> Entrar al Sistema';
+            }
+        }
+
+        // Register Handler
+        async function handleRegisterSubmit(e) {
+            e.preventDefault();
+            hideAlert();
+            const nombre = document.getElementById('regNombre').value.trim();
+            const dni = document.getElementById('regDni').value.trim();
+            const email = document.getElementById('regEmail').value.trim();
+            const password = document.getElementById('regPassword').value;
+            const cargo = document.getElementById('regCargo').value;
+            const btn = document.getElementById('btnRegisterSubmit');
+
+            if (!nombre || !dni || !email || !password || !cargo) {
+                showAlert('Por favor completa todos los campos.');
+                return;
+            }
+
+            if (!/^\d{8}$/.test(dni)) {
+                showAlert('El DNI debe tener exactamente 8 números.');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Registrando...';
+
+            try {
+                const res = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nombre, dni, email, password, cargo })
+                });
+
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    showAlert(data.message || 'Error al registrar usuario.');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Registrar Cuenta';
+                    return;
+                }
+
+                // Save session
+                localStorage.setItem('qr_token', data.token);
+                localStorage.setItem('qr_user', JSON.stringify(data.user));
+
+                showAlert('Cuenta creada exitosamente. Redirigiendo...', 'success');
+
+                setTimeout(() => {
+                    if (data.user.cargo === 'Supervisor') {
+                        window.location.replace('scanner.html');
+                    } else {
+                        window.location.replace('index.html');
+                    }
+                }, 600);
+
+            } catch (err) {
+                console.error('Error de registro:', err);
+                showAlert('Error de conexión con el servidor.');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Registrar Cuenta';
+            }
+        }
+    </script>
+</body>
+</html>
+
