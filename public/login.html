@@ -10,33 +10,33 @@
 </head>
 <body class="auth-wrapper">
     <div class="auth-container">
-        <!-- Auth Header -->
+        <!-- Auth Minimalist Header -->
         <div class="auth-header">
-            <div class="auth-logo">
-                <i class="fa-solid fa-qrcode" style="color: #60a5fa;"></i>
-                <span>QR Asistencia</span>
+            <div class="auth-brand-badge">
+                <i class="fa-solid fa-qrcode"></i>
             </div>
-            <p>Sistema Profesional de Control de Asistencia</p>
-        </div>
-
-        <!-- Auth Tabs -->
-        <div class="auth-tabs">
-            <button type="button" class="auth-tab-btn active" id="tabLoginBtn" onclick="switchAuthTab('login')">
-                <i class="fa-solid fa-right-to-bracket"></i> Iniciar Sesión
-            </button>
-            <button type="button" class="auth-tab-btn" id="tabRegisterBtn" onclick="switchAuthTab('register')">
-                <i class="fa-solid fa-user-plus"></i> Crear Cuenta
-            </button>
+            <h2 class="auth-title">QR Asistencia</h2>
+            <p class="auth-subtitle">Control Profesional de Asistencia</p>
         </div>
 
         <div class="auth-body">
+            <!-- Minimalist Segmented Tabs -->
+            <div class="auth-segmented-control">
+                <button type="button" class="auth-segment-btn active" id="tabLoginBtn" onclick="switchAuthTab('login')">
+                    <i class="fa-solid fa-right-to-bracket"></i> Iniciar Sesión
+                </button>
+                <button type="button" class="auth-segment-btn" id="tabRegisterBtn" onclick="switchAuthTab('register')">
+                    <i class="fa-solid fa-user-plus"></i> Crear Cuenta
+                </button>
+            </div>
+
             <!-- Alert Message Box -->
-            <div id="authAlert" class="auth-alert"></div>
+            <div id="authAlert" class="auth-alert-minimal"></div>
 
             <!-- Login Form -->
             <form id="formLogin" class="auth-form" onsubmit="handleLoginSubmit(event)">
                 <div class="form-group">
-                    <label for="loginIdentifier"><i class="fa-regular fa-envelope"></i> Correo electrónico o DNI</label>
+                    <label for="loginIdentifier"><i class="fa-regular fa-envelope"></i> Correo o DNI</label>
                     <input type="text" id="loginIdentifier" class="form-control" placeholder="ej. admin@qrasistencia.com o 11111111" required autofocus autocomplete="username">
                 </div>
 
@@ -45,8 +45,8 @@
                     <input type="password" id="loginPassword" class="form-control" placeholder="Ingresa tu contraseña" required autocomplete="current-password">
                 </div>
 
-                <button type="submit" id="btnLoginSubmit" class="auth-btn-submit">
-                    <i class="fa-solid fa-arrow-right-to-bracket"></i> Entrar al Sistema
+                <button type="submit" id="btnLoginSubmit" class="auth-btn-minimal">
+                    <i class="fa-solid fa-arrow-right-to-bracket"></i> Iniciar Sesión
                 </button>
             </form>
 
@@ -54,12 +54,12 @@
             <form id="formRegister" class="auth-form" style="display: none;" onsubmit="handleRegisterSubmit(event)">
                 <div class="form-group">
                     <label for="regNombre"><i class="fa-regular fa-user"></i> Nombre Completo</label>
-                    <input type="text" id="regNombre" class="form-control" placeholder="ej. Carlos Mendoza" required autocomplete="name">
+                    <input type="text" id="regNombre" class="form-control" placeholder="ej. Jesus Gonzalez" required autocomplete="name">
                 </div>
 
                 <div class="form-group">
                     <label for="regDni"><i class="fa-regular fa-id-card"></i> DNI (8 números)</label>
-                    <input type="text" id="regDni" class="form-control" placeholder="ej. 12345678" maxlength="8" pattern="[0-9]{8}" required>
+                    <input type="text" id="regDni" class="form-control" placeholder="ej. 12345678" maxlength="8" pattern="[0-9]{8}" inputmode="numeric" required>
                 </div>
 
                 <div class="form-group">
@@ -74,13 +74,13 @@
 
                 <div class="form-group">
                     <label for="regCargo"><i class="fa-solid fa-shield-halved"></i> Cargo / Rol</label>
-                    <select id="regCargo" class="form-control" required style="padding: 10px; font-weight: 500;">
+                    <select id="regCargo" class="form-control" required>
                         <option value="Administrador">Administrador (Acceso total: Dashboard, QR, Reportes)</option>
                         <option value="Supervisor">Supervisor (Acceso exclusivo a Escáner)</option>
                     </select>
                 </div>
 
-                <button type="submit" id="btnRegisterSubmit" class="auth-btn-submit" style="background: linear-gradient(135deg, #2563eb, #1d4ed8);">
+                <button type="submit" id="btnRegisterSubmit" class="auth-btn-minimal">
                     <i class="fa-solid fa-user-plus"></i> Registrar Cuenta
                 </button>
             </form>
@@ -115,12 +115,12 @@
         function showAlert(message, type = 'error') {
             const alertBox = document.getElementById('authAlert');
             alertBox.textContent = message;
-            alertBox.className = `auth-alert ${type}`;
+            alertBox.className = `auth-alert-minimal ${type}`;
         }
 
         function hideAlert() {
             const alertBox = document.getElementById('authAlert');
-            alertBox.className = 'auth-alert';
+            alertBox.className = 'auth-alert-minimal';
             alertBox.textContent = '';
         }
 

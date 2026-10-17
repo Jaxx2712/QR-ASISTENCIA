@@ -90,7 +90,18 @@ async function initDB() {
             FOREIGN KEY(worker_dni) REFERENCES workers(dni)
         )`);
 
-        // Users table for authentication & roles
+        await ensureUsersTable();
+
+        console.log('Connected to database and initialized tables.');
+    } catch (err) {
+        console.error('Error initializing database:', err.message);
+    }
+}
+
+let isUsersTableReady = false;
+async function ensureUsersTable() {
+    if (isUsersTableReady) return;
+    try {
         await db.execute(`CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nombre TEXT NOT NULL,
@@ -102,21 +113,24 @@ async function initDB() {
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`);
 
-        // Seed default administrator if users table is empty
-        const userCount = await db.execute(`SELECT COUNT(*) as count FROM users`);
-        if (Number(userCount.rows[0]?.count || 0) === 0) {
-            const salt = crypto.randomBytes(16).toString('hex');
-            const hash = crypto.scryptSync('admin123', salt, 64).toString('hex');
-            await db.execute({
-                sql: `INSERT INTO users (nombre, dni, email, password_hash, salt, cargo) VALUES (?, ?, ?, ?, ?, ?)`,
-                args: ['Administrador Principal', '11111111', 'admin@qrasistencia.com', hash, salt, 'Administrador']
-            });
-            console.log('Cuenta de Administrador inicial creada: admin@qrasistencia.com (DNI: 11111111 / Clave: admin123)');
+        try {
+            const userCount = await db.execute(`SELECT COUNT(*) as count FROM users`);
+            if (Number(userCount.rows[0]?.count || 0) === 0) {
+                const salt = crypto.randomBytes(16).toString('hex');
+                const hash = crypto.scryptSync('admin123', salt, 64).toString('hex');
+                await db.execute({
+                    sql: `INSERT INTO users (nombre, dni, email, password_hash, salt, cargo) VALUES (?, ?, ?, ?, ?, ?)`,
+                    args: ['Administrador Principal', '11111111', 'admin@qrasistencia.com', hash, salt, 'Administrador']
+                });
+                console.log('Cuenta de Administrador inicial creada: admin@qrasistencia.com (DNI: 11111111 / Clave: admin123)');
+            }
+        } catch (e) {
+            // ignore count error
         }
 
-        console.log('Connected to database and initialized tables.');
+        isUsersTableReady = true;
     } catch (err) {
-        console.error('Error initializing database:', err.message);
+        console.error('Error ensuring users table:', err.message);
     }
 }
 
@@ -257,10 +271,26 @@ app.post('/api/auth/register', async (req, res) => {
     }
 
     try {
-        const existing = await db.execute({
-            sql: `SELECT dni, email FROM users WHERE dni = ? OR email = ?`,
-            args: [cleanDni, cleanEmail]
-        });
+        await ensureUsersTable();
+
+        let existing;
+        try {
+            existing = await db.execute({
+                sql: `SELECT dni, email FROM users WHERE dni = ? OR email = ?`,
+                args: [cleanDni, cleanEmail]
+            });
+        } catch (dbErr) {
+            if (dbErr.message && dbErr.message.includes('no such table')) {
+                isUsersTableReady = false;
+                await ensureUsersTable();
+                existing = await db.execute({
+                    sql: `SELECT dni, email FROM users WHERE dni = ? OR email = ?`,
+                    args: [cleanDni, cleanEmail]
+                });
+            } else {
+                throw dbErr;
+            }
+        }
 
         if (existing.rows.length > 0) {
             const match = existing.rows[0];
@@ -307,10 +337,26 @@ app.post('/api/auth/login', async (req, res) => {
     const cleanIdentifier = String(identifier).trim().toLowerCase();
 
     try {
-        const result = await db.execute({
-            sql: `SELECT * FROM users WHERE LOWER(email) = ? OR dni = ?`,
-            args: [cleanIdentifier, cleanIdentifier]
-        });
+        await ensureUsersTable();
+
+        let result;
+        try {
+            result = await db.execute({
+                sql: `SELECT * FROM users WHERE LOWER(email) = ? OR dni = ?`,
+                args: [cleanIdentifier, cleanIdentifier]
+            });
+        } catch (dbErr) {
+            if (dbErr.message && dbErr.message.includes('no such table')) {
+                isUsersTableReady = false;
+                await ensureUsersTable();
+                result = await db.execute({
+                    sql: `SELECT * FROM users WHERE LOWER(email) = ? OR dni = ?`,
+                    args: [cleanIdentifier, cleanIdentifier]
+                });
+            } else {
+                throw dbErr;
+            }
+        }
 
         if (result.rows.length === 0) {
             return res.status(401).json({ success: false, message: 'DNI/Correo o contraseña incorrectos.' });
