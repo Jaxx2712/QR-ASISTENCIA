@@ -107,7 +107,7 @@ function setupUserProfileButton(user) {
 function injectProfileModal() {
     if (document.getElementById('profileModalOverlay')) return;
 
-    const user = getAuthUser() || { nombre: 'Usuario', dni: '--------', email: '---', cargo: '---' };
+    const user = getAuthUser() || { nombre: 'Usuario', dni: '--------', cargo: '---' };
     const initials = user.nombre ? user.nombre.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'US';
     const roleBadgeClass = user.cargo === 'Administrador' ? 'admin' : 'supervisor';
     const currentTheme = localStorage.getItem('qr_theme') || 'light';
@@ -126,7 +126,6 @@ function injectProfileModal() {
                     <div class="profile-avatar-large">${initials}</div>
                     <div class="profile-user-info">
                         <h4 title="${escapeAuthHtml(user.nombre)}">${escapeAuthHtml(user.nombre)}</h4>
-                        <p title="${escapeAuthHtml(user.email)}"><i class="fa-regular fa-envelope"></i> ${escapeAuthHtml(user.email)}</p>
                         <p style="margin-bottom: 8px;"><i class="fa-regular fa-id-card"></i> DNI: <strong>${escapeAuthHtml(user.dni)}</strong></p>
                         <span class="role-badge ${roleBadgeClass}">
                             <i class="fa-solid ${user.cargo === 'Administrador' ? 'fa-shield-halved' : 'fa-camera'}"></i>

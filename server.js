@@ -237,17 +237,16 @@ function requireAdmin(req, res, next) {
 
 // Auth Routes
 
-// POST /api/auth/register - Register a user (Administrador or Supervisor)
+// POST /api/auth/register - Register a user by DNI (Administrador or Supervisor)
 app.post('/api/auth/register', async (req, res) => {
-    const { nombre, dni, email, password, cargo } = req.body;
+    const { nombre, dni, password, cargo } = req.body;
     
-    if (!nombre || !dni || !email || !password || !cargo) {
+    if (!nombre || !dni || !password || !cargo) {
         return res.status(400).json({ success: false, message: 'Todos los campos son obligatorios.' });
     }
 
     const cleanNombre = String(nombre).trim();
     const cleanDni = String(dni).trim();
-    const cleanEmail = String(email).trim().toLowerCase();
     const cleanCargo = String(cargo).trim();
 
     if (!/^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]{3,60}$/.test(cleanNombre)) {
@@ -256,10 +255,6 @@ app.post('/api/auth/register', async (req, res) => {
 
     if (!/^\d{8}$/.test(cleanDni)) {
         return res.status(400).json({ success: false, message: 'El DNI debe contener exactamente 8 números.' });
-    }
-
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-        return res.status(400).json({ success: false, message: 'Formato de correo electrónico inválido.' });
     }
 
     if (String(password).length < 6) {
@@ -276,16 +271,16 @@ app.post('/api/auth/register', async (req, res) => {
         let existing;
         try {
             existing = await db.execute({
-                sql: `SELECT dni, email FROM users WHERE dni = ? OR email = ?`,
-                args: [cleanDni, cleanEmail]
+                sql: `SELECT dni FROM users WHERE dni = ?`,
+                args: [cleanDni]
             });
         } catch (dbErr) {
             if (dbErr.message && dbErr.message.includes('no such table')) {
                 isUsersTableReady = false;
                 await ensureUsersTable();
                 existing = await db.execute({
-                    sql: `SELECT dni, email FROM users WHERE dni = ? OR email = ?`,
-                    args: [cleanDni, cleanEmail]
+                    sql: `SELECT dni FROM users WHERE dni = ?`,
+                    args: [cleanDni]
                 });
             } else {
                 throw dbErr;
@@ -293,24 +288,20 @@ app.post('/api/auth/register', async (req, res) => {
         }
 
         if (existing.rows.length > 0) {
-            const match = existing.rows[0];
-            if (match.dni === cleanDni) {
-                return res.status(409).json({ success: false, message: 'Ya existe un usuario con este DNI.' });
-            }
-            return res.status(409).json({ success: false, message: 'Ya existe un usuario con este correo electrónico.' });
+            return res.status(409).json({ success: false, message: 'Ya existe un usuario registrado con este DNI.' });
         }
 
         const { salt, hash } = hashPassword(password);
+        const emailVal = req.body.email ? String(req.body.email).trim().toLowerCase() : `${cleanDni}@qrasistencia.local`;
         const insertRes = await db.execute({
             sql: `INSERT INTO users (nombre, dni, email, password_hash, salt, cargo) VALUES (?, ?, ?, ?, ?, ?)`,
-            args: [cleanNombre, cleanDni, cleanEmail, hash, salt, cleanCargo]
+            args: [cleanNombre, cleanDni, emailVal, hash, salt, cleanCargo]
         });
 
         const userObj = {
             id: Number(insertRes.lastInsertRowid || 0),
             nombre: cleanNombre,
             dni: cleanDni,
-            email: cleanEmail,
             cargo: cleanCargo
         };
 
@@ -327,14 +318,13 @@ app.post('/api/auth/register', async (req, res) => {
     }
 });
 
-// POST /api/auth/login - Login with DNI or Email
+// POST /api/auth/login - Login with DNI
 app.post('/api/auth/login', async (req, res) => {
-    const { identifier, password } = req.body;
-    if (!identifier || !password) {
-        return res.status(400).json({ success: false, message: 'Por favor complete todos los campos.' });
+    const { dni, identifier, password } = req.body;
+    const loginDni = String(dni || identifier || '').trim();
+    if (!loginDni || !password) {
+        return res.status(400).json({ success: false, message: 'Por favor ingresa tu DNI y contraseña.' });
     }
-
-    const cleanIdentifier = String(identifier).trim().toLowerCase();
 
     try {
         await ensureUsersTable();
@@ -342,16 +332,16 @@ app.post('/api/auth/login', async (req, res) => {
         let result;
         try {
             result = await db.execute({
-                sql: `SELECT * FROM users WHERE LOWER(email) = ? OR dni = ?`,
-                args: [cleanIdentifier, cleanIdentifier]
+                sql: `SELECT * FROM users WHERE dni = ? OR LOWER(email) = ?`,
+                args: [loginDni, loginDni.toLowerCase()]
             });
         } catch (dbErr) {
             if (dbErr.message && dbErr.message.includes('no such table')) {
                 isUsersTableReady = false;
                 await ensureUsersTable();
                 result = await db.execute({
-                    sql: `SELECT * FROM users WHERE LOWER(email) = ? OR dni = ?`,
-                    args: [cleanIdentifier, cleanIdentifier]
+                    sql: `SELECT * FROM users WHERE dni = ? OR LOWER(email) = ?`,
+                    args: [loginDni, loginDni.toLowerCase()]
                 });
             } else {
                 throw dbErr;
@@ -359,20 +349,19 @@ app.post('/api/auth/login', async (req, res) => {
         }
 
         if (result.rows.length === 0) {
-            return res.status(401).json({ success: false, message: 'DNI/Correo o contraseña incorrectos.' });
+            return res.status(401).json({ success: false, message: 'DNI o contraseña incorrectos.' });
         }
 
         const user = result.rows[0];
         const isValid = verifyPassword(password, user.salt, user.password_hash);
         if (!isValid) {
-            return res.status(401).json({ success: false, message: 'DNI/Correo o contraseña incorrectos.' });
+            return res.status(401).json({ success: false, message: 'DNI o contraseña incorrectos.' });
         }
 
         const userObj = {
             id: user.id,
             nombre: user.nombre,
             dni: user.dni,
-            email: user.email,
             cargo: user.cargo
         };
 
