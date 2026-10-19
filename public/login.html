@@ -42,7 +42,12 @@
 
                 <div class="form-group">
                     <label for="loginPassword"><i class="fa-solid fa-lock"></i> Contraseña</label>
-                    <input type="password" id="loginPassword" class="form-control" placeholder="Ingresa tu contraseña" required autocomplete="current-password">
+                    <div class="auth-password-wrapper">
+                        <input type="password" id="loginPassword" class="form-control" placeholder="Ingresa tu contraseña" required autocomplete="current-password">
+                        <button type="button" class="auth-password-toggle" onclick="togglePasswordVisibility('loginPassword', this)" aria-label="Mostrar u ocultar contraseña">
+                            <i class="fa-regular fa-eye"></i>
+                        </button>
+                    </div>
                 </div>
 
                 <button type="submit" id="btnLoginSubmit" class="auth-btn-minimal">
@@ -64,7 +69,12 @@
 
                 <div class="form-group">
                     <label for="regPassword"><i class="fa-solid fa-lock"></i> Contraseña</label>
-                    <input type="password" id="regPassword" class="form-control" placeholder="Mínimo 6 caracteres" minlength="6" required autocomplete="new-password">
+                    <div class="auth-password-wrapper">
+                        <input type="password" id="regPassword" class="form-control" placeholder="Mínimo 6 caracteres" minlength="6" required autocomplete="new-password">
+                        <button type="button" class="auth-password-toggle" onclick="togglePasswordVisibility('regPassword', this)" aria-label="Mostrar u ocultar contraseña">
+                            <i class="fa-regular fa-eye"></i>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -117,6 +127,21 @@
             const alertBox = document.getElementById('authAlert');
             alertBox.className = 'auth-alert-minimal';
             alertBox.textContent = '';
+        }
+
+        function togglePasswordVisibility(inputId, btn) {
+            const input = document.getElementById(inputId);
+            if (!input) return;
+            const isPassword = input.type === 'password';
+            input.type = isPassword ? 'text' : 'password';
+            const icon = btn.querySelector('i');
+            if (icon) {
+                if (isPassword) {
+                    icon.className = 'fa-regular fa-eye-slash';
+                } else {
+                    icon.className = 'fa-regular fa-eye';
+                }
+            }
         }
 
         // Login Handler
