@@ -1351,7 +1351,7 @@ body.dark-mode .section-header h2 {
 }
 
 body.dark-mode .excel-sheet-table {
-    background: #ffffff;
+    background: var(--card);
 }
 
 body.dark-mode .modal {
