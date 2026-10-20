@@ -516,10 +516,10 @@ input[type="file"]::file-selector-button:hover {
 
 .mc-cell.empty { background: none; }
 .mc-cell.attended { background-color: var(--success); color: white; }
-.mc-cell.absent { background-color: #e2e8f0; color: var(--text-light); }
+.mc-cell.absent { background-color: var(--bg); color: var(--text-light); }
 .mc-cell.future { background-color: transparent; color: #cbd5e1; }
 .mc-cell.today { border: 2px solid var(--accent); font-weight: 700; }
-.mc-cell.weekend.absent { background-color: #f1f5f9; color: #94a3b8; }
+.mc-cell.weekend.absent { background-color: var(--bg); color: var(--text-light); }
 
 .btn-detail {
     width: 100%;
