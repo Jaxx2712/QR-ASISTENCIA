@@ -1265,13 +1265,13 @@ input[type="file"]::file-selector-button:hover {
 }
 
 /* ==========================================================================
-   Modo Oscuro (Dark Mode Theme)
+    Modo Oscuro (Dark Mode Theme)
    ========================================================================== */
 body.dark-mode, [data-theme="dark"] {
     --bg: #0b1120;
     --card: #1e293b;
     --text: #f8fafc;
-    --text-light: #94a3b8;
+    --text-light: #1e293b;
     --border: #334155;
     --shadow-sm: 0 1px 3px rgba(0,0,0,0.5);
     --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.5);
