@@ -1219,7 +1219,7 @@ input[type="file"]::file-selector-button:hover {
 .excel-title-cell {
     font-size: 1.05rem;
     font-weight: 500;
-    background: var(--primary-light);
+    background: #ffffff;
     letter-spacing: 0.5px;
     padding: 10px 14px !important;
 }
@@ -1351,7 +1351,7 @@ body.dark-mode .section-header h2 {
 }
 
 body.dark-mode .excel-sheet-table {
-    background: var(--primary-light);
+    background: #ffffff;
 }
 
 body.dark-mode .modal {
