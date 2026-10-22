@@ -1,3 +1,5 @@
+const API_URL = 'https://qr-asistencia-backend-keum.onrender.com';
+
 // Client Authentication, Role Permissions and Theme Management
 
 (function () {
@@ -204,7 +206,7 @@ async function logoutSession() {
     try {
         const token = getAuthToken();
         if (token) {
-            await fetch('/api/auth/logout', {
+            await fetch(`${API_URL}/api/auth/logout`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             });

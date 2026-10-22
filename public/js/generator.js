@@ -1,3 +1,5 @@
+const API_URL = 'https://qr-asistencia-backend-keum.onrender.com';
+
 document.addEventListener('DOMContentLoaded', () => {
     startClock();
     loadWorkersList();
@@ -65,7 +67,7 @@ async function generateQR() {
     }
 
     try {
-        const response = await fetch('/api/workers', {
+        const response = await fetch(`${API_URL}/api/workers`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ dni, nombre, cargo, empresa, foto })
@@ -271,7 +273,7 @@ async function downloadBadge() {
 
 // For re-downloading a badge from the workers list
 async function regenerateBadge(dni) {
-    const res = await fetch(`/api/workers/${dni}`);
+    const res = await fetch(`${API_URL}/api/workers/${dni}`);
     const worker = await res.json();
     
     // Generate QR
@@ -311,7 +313,7 @@ function escapeHtml(str) {
 
 async function loadWorkersList() {
     try {
-        const res = await fetch('/api/workers');
+        const res = await fetch(`${API_URL}/api/workers`);
         const workers = await res.json();
         const tbody = document.getElementById('workersTable');
         tbody.innerHTML = '';

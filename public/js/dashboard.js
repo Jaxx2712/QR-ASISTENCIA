@@ -1,3 +1,5 @@
+const API_URL = 'https://qr-asistencia-backend-keum.onrender.com';
+
 // Main dashboard functionality
 
 let allWorkers = [];
@@ -48,7 +50,7 @@ function startClock() {
 // Stats
 async function loadStats() {
     try {
-        const res = await fetch('/api/dashboard');
+        const res = await fetch(`${API_URL}/api/dashboard`);
         if (!res.ok) throw new Error('Network error');
         const data = await res.json();
         
@@ -85,7 +87,7 @@ function animateValue(id, end) {
 // Workers
 async function loadWorkers() {
     try {
-        const res = await fetch('/api/workers');
+        const res = await fetch(`${API_URL}/api/workers`);
         if (!res.ok) throw new Error('Network error');
         allWorkers = await res.json();
         
@@ -120,7 +122,7 @@ async function renderWorkers(workersToRender) {
         // Fetch attendance for mini calendar
         let attendanceDays = new Set();
         try {
-            const attRes = await fetch(`/api/attendance/${worker.dni}?month=${year}-${String(month + 1).padStart(2, '0')}`);
+            const attRes = await fetch(`${API_URL}/api/attendance/${worker.dni}?month=${year}-${String(month + 1).padStart(2, '0')}`);
             if (attRes.ok) {
                 const attData = await attRes.json();
                 attData.forEach(record => {
@@ -296,7 +298,7 @@ async function loadModalCalendar(dni, year, month) {
     // Fetch attendance
     let attendanceData = {};
     try {
-        const attRes = await fetch(`/api/attendance/${dni}?month=${year}-${String(month + 1).padStart(2, '0')}`);
+        const attRes = await fetch(`${API_URL}/api/attendance/${dni}?month=${year}-${String(month + 1).padStart(2, '0')}`);
         if (attRes.ok) {
             const records = await attRes.json();
             records.forEach(r => {
@@ -424,7 +426,7 @@ async function deleteWorker(dni) {
     if (!confirm('¿Estás seguro de eliminar este trabajador y todos sus registros?')) return;
     
     try {
-        const res = await fetch(`/api/workers/${dni}`, { method: 'DELETE' });
+        const res = await fetch(`${API_URL}/api/workers/${dni}`, { method: 'DELETE' });
         if (res.ok) {
             // Remove from global array and re-render
             allWorkers = allWorkers.filter(w => w.dni !== dni);

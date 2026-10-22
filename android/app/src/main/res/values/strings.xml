@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">qr-asistencia-pro</string>
+    <string name="title_activity_main">qr-asistencia-pro</string>
+    <string name="package_name">com.empresa.qrasistencia</string>
+    <string name="custom_url_scheme">com.empresa.qrasistencia</string>
+</resources>

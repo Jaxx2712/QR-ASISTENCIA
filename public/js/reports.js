@@ -1,3 +1,5 @@
+const API_URL = 'https://qr-asistencia-backend-keum.onrender.com';
+
 // Daily Attendance Report Functionality
 
 let currentRecords = [];
@@ -84,7 +86,7 @@ async function loadDailyReport(isSilent = false) {
     currentFecha = selectedDate;
 
     try {
-        const res = await fetch(`/api/reports/daily?fecha=${selectedDate}`);
+        const res = await fetch(`${API_URL}/api/reports/daily?fecha=${selectedDate}`);
         if (!res.ok) throw new Error('Error al consultar el reporte');
         const data = await res.json();
 
@@ -177,7 +179,7 @@ function downloadExcelReport() {
     }
 
     // Direct download from server (guarantees native Excel styling, exact borders and fonts)
-    const downloadUrl = `/api/reports/daily/download?fecha=${encodeURIComponent(fecha)}`;
+    const downloadUrl = `${API_URL}/api/reports/daily/download?fecha=${encodeURIComponent(fecha)}`;
     
     // Trigger download
     const link = document.createElement('a');

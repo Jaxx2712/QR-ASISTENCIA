@@ -1,4 +1,5 @@
 const express = require('express');
+const cors = require('cors');
 const { createClient } = require('@libsql/client');
 require('dotenv').config();
 const path = require('path');
@@ -7,6 +8,7 @@ const crypto = require('crypto');
 const ExcelJS = require('exceljs');
 
 const app = express();
+app.use(cors()); // Esto permite que cualquier origen (incluyendo tu app móvil) se conecte al backend
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json({ limit: '5mb' }));
@@ -17,7 +19,7 @@ app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-XSS-Protection', '1; mode=block');
-    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Content-Security-Policy', "default-src 'self' https:; script-src 'self' 'unsafe-inline'; connect-src 'self' https://qr-asistencia-backend-keum.onrender.com;");
     res.setHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()');
     res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: blob:; connect-src 'self'");
     next();

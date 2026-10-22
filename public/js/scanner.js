@@ -1,3 +1,5 @@
+const API_URL = 'https://qr-asistencia-backend-keum.onrender.com';
+
 let html5QrcodeScanner = null;
 let activeWorkerData = null;
 
@@ -111,7 +113,7 @@ async function recordAttendance(tipo) {
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrando...';
     
     try {
-        const response = await fetch('/api/attendance', {
+        const response = await fetch(`${API_URL}/api/attendance`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ worker_dni: activeWorkerData.dni, tipo })
@@ -154,7 +156,7 @@ async function recordAttendance(tipo) {
 
 async function loadRecentActivity() {
     try {
-        const res = await fetch('/api/attendance?limit=20');
+        const res = await fetch(`${API_URL}/api/attendance?limit=20`);
         const records = await res.json();
         
         const container = document.getElementById('activityList');
