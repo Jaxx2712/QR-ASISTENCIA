@@ -1,5 +1,3 @@
-const API_URL = 'https://qr-asistencia-backend-keum.onrender.com';
-
 let html5QrcodeScanner = null;
 let activeWorkerData = null;
 

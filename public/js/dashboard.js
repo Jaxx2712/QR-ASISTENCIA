@@ -1,5 +1,3 @@
-const API_URL = 'https://qr-asistencia-backend-keum.onrender.com';
-
 // Main dashboard functionality
 
 let allWorkers = [];

@@ -1,5 +1,3 @@
-const API_URL = 'https://qr-asistencia-backend-keum.onrender.com';
-
 document.addEventListener('DOMContentLoaded', () => {
     startClock();
     loadWorkersList();
@@ -137,7 +135,7 @@ async function downloadBadge() {
     // Background
     ctx.beginPath();
     ctx.fillStyle = '#ffffff';
-    ctx.roundRect(0, 0, 600, 900, 24); // 12px * 2
+    ctx.roundRect(0, 0, 600, 900, 24);
     ctx.fill();
     
     // Header gradient
@@ -146,33 +144,31 @@ async function downloadBadge() {
     headerGrad.addColorStop(0, '#1e3a5f');
     headerGrad.addColorStop(1, '#2d5a8e');
     ctx.fillStyle = headerGrad;
-    ctx.roundRect(0, 0, 600, 160, [24, 24, 0, 0]); // 80px * 2
+    ctx.roundRect(0, 0, 600, 160, [24, 24, 0, 0]);
     ctx.fill();
     
     // Company name
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 36px Inter, sans-serif'; // 18px * 2
+    ctx.font = 'bold 36px Inter, sans-serif';
     ctx.textAlign = 'center';
     const empresa = document.getElementById('badgeEmpresa').textContent;
     ctx.fillText(empresa, 300, 80);
     
     // Subtitle
-    ctx.font = '20px Inter, sans-serif'; // 10px * 2
+    ctx.font = '20px Inter, sans-serif';
     ctx.fillStyle = 'rgba(255,255,255,0.8)';
     ctx.fillText('CARNET DE ASISTENCIA', 300, 120);
     
-    // Avatar circle (matches the UI overlapping position)
-    const centerY = 200; // 40px * 2 (top) + 50px * 2 (center)
-    const outerRadius = 60; // 50px * 2
-    const innerRadius = 50; // (50px - 4px) * 2
+    // Avatar circle
+    const centerY = 200;
+    const outerRadius = 60;
+    const innerRadius = 50;
 
-    // White padding background for avatar
     ctx.beginPath();
     ctx.arc(300, centerY, outerRadius, 0, Math.PI * 2);
     ctx.fillStyle = '#ffffff';
     ctx.fill();
 
-    // Avatar image or initials
     const nombre = document.getElementById('badgeNombre').textContent;
     const avatarContainer = document.getElementById('badgeAvatar');
     const imgEl = avatarContainer.querySelector('img');
@@ -183,8 +179,6 @@ async function downloadBadge() {
     if (imgEl) {
         ctx.save();
         ctx.clip();
-        
-        // Simulating object-fit: cover
         const imgRatio = (imgEl.naturalWidth || 1) / (imgEl.naturalHeight || 1);
         const targetSize = innerRadius * 2;
         let drawWidth = targetSize;
@@ -192,10 +186,10 @@ async function downloadBadge() {
         let offsetX = 300 - innerRadius;
         let offsetY = centerY - innerRadius;
 
-        if (imgRatio > 1) { // Landscape
+        if (imgRatio > 1) {
             drawWidth = targetSize * imgRatio;
             offsetX = 300 - (drawWidth / 2);
-        } else if (imgRatio < 1) { // Portrait
+        } else if (imgRatio < 1) {
             drawHeight = targetSize / imgRatio;
             offsetY = centerY - (drawHeight / 2);
         }
@@ -237,7 +231,6 @@ async function downloadBadge() {
     ctx.stroke();
     
     // QR Code Container
-    // UI: width 130px (scaled to 260px), padding 5px (10px), border 1px (2px), border-radius 5px (10px)
     ctx.beginPath();
     ctx.fillStyle = '#ffffff';
     ctx.strokeStyle = '#e2e8f0';
@@ -251,25 +244,43 @@ async function downloadBadge() {
     ctx.drawImage(qrCanvas, 180, 490, 240, 240);
     
     // Footer text
-    ctx.font = '18px Inter, sans-serif'; // 9px * 2
+    ctx.font = '18px Inter, sans-serif';
     ctx.fillStyle = '#94a3b8';
     ctx.fillText('Escanea este código para', 300, 780);
     ctx.fillText('registrar asistencia', 300, 805);
     
-    // Outer Card border (matches the 1px solid #e2e8f0)
+    // Outer Card border
     ctx.beginPath();
     ctx.strokeStyle = '#e2e8f0';
     ctx.lineWidth = 2;
     ctx.roundRect(1, 1, 598, 898, 24);
     ctx.stroke();
     
-    // Download
-    const link = document.createElement('a');
+    // Mobile Share / Download mechanism
     const safeName = nombre.replace(/\s+/g, '_');
-    link.download = `Carnet_${safeName}.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
+    canvas.toBlob(async (blob) => {
+        const file = new File([blob], `Carnet_${safeName}.png`, { type: 'image/png' });
+        
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+                await navigator.share({
+                    files: [file],
+                    title: 'Carnet de Asistencia',
+                    text: `Carnet de ${nombre}`
+                });
+            } catch (err) {
+                console.log('Compartir cancelado o no disponible', err);
+            }
+        } else {
+            // Fallback para navegadores web de escritorio
+            const link = document.createElement('a');
+            link.download = `Carnet_${safeName}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+    }, 'image/png');
 }
+
 
 // For re-downloading a badge from the workers list
 async function regenerateBadge(dni) {
