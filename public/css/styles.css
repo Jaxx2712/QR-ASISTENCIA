@@ -1359,7 +1359,7 @@ body.dark-mode .modal {
 }
 
 /* ==========================================================================
-   Modal de Perfil y Configuraciones (Botón antes inhabilitado)
+    Modal de Perfil y Configuraciones (Botón antes inhabilitado)
    ========================================================================== */
 .profile-modal-overlay {
     position: fixed;
@@ -1581,7 +1581,7 @@ body.dark-mode .modal {
 }
 
 /* ==========================================================================
-   Página de Acceso Minimalista (login.html)
+    Página de Acceso Minimalista (login.html)
    ========================================================================== */
 .auth-wrapper {
     min-height: 100vh;

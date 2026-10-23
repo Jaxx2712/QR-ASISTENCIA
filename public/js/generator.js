@@ -126,19 +126,19 @@ function renderBadgePreview({ dni, nombre, cargo, empresa, foto }) {
 }
 
 async function downloadBadge() {
-    // Create an offscreen canvas and draw the badge exactly like the UI
+    // Crear canvas y dibujar el carnet exactamente igual
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     canvas.width = 600;
     canvas.height = 900;
     
-    // Background
+    // Fondo blanco
     ctx.beginPath();
     ctx.fillStyle = '#ffffff';
     ctx.roundRect(0, 0, 600, 900, 24);
     ctx.fill();
     
-    // Header gradient
+    // Cabecera degradada
     ctx.beginPath();
     const headerGrad = ctx.createLinearGradient(0, 0, 600, 0);
     headerGrad.addColorStop(0, '#1e3a5f');
@@ -147,19 +147,19 @@ async function downloadBadge() {
     ctx.roundRect(0, 0, 600, 160, [24, 24, 0, 0]);
     ctx.fill();
     
-    // Company name
+    // Empresa
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 36px Inter, sans-serif';
     ctx.textAlign = 'center';
     const empresa = document.getElementById('badgeEmpresa').textContent;
     ctx.fillText(empresa, 300, 80);
     
-    // Subtitle
+    // Subtítulo
     ctx.font = '20px Inter, sans-serif';
     ctx.fillStyle = 'rgba(255,255,255,0.8)';
     ctx.fillText('CARNET DE ASISTENCIA', 300, 120);
     
-    // Avatar circle
+    // Avatar y datos
     const centerY = 200;
     const outerRadius = 60;
     const innerRadius = 50;
@@ -198,31 +198,29 @@ async function downloadBadge() {
         ctx.restore();
     } else {
         const initials = nombre.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-        ctx.fillStyle = getAvatarColor(nombre);
+        ctx.fillStyle = '#1e3a5f';
         ctx.fill();
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 64px Inter, sans-serif'; 
         ctx.fillText(initials, 300, centerY + 22);
     }
     
-    // Name
+    // Nombre y detalles
     ctx.fillStyle = '#1e293b';
     ctx.font = 'bold 36px Inter, sans-serif'; 
     ctx.fillText(nombre, 300, 320);
     
-    // Cargo
     const cargo = document.getElementById('badgeCargo').textContent;
     ctx.font = '26px Inter, sans-serif'; 
     ctx.fillStyle = '#64748b';
     ctx.fillText(cargo, 300, 365);
     
-    // DNI
     const dniText = document.getElementById('badgeDni').textContent;
     ctx.font = '24px Inter, sans-serif'; 
     ctx.fillStyle = '#94a3b8';
     ctx.fillText(dniText, 300, 405);
     
-    // Separator line
+    // Línea divisoria
     ctx.strokeStyle = '#e2e8f0';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -230,7 +228,7 @@ async function downloadBadge() {
     ctx.lineTo(480, 440);
     ctx.stroke();
     
-    // QR Code Container
+    // Código QR
     ctx.beginPath();
     ctx.fillStyle = '#ffffff';
     ctx.strokeStyle = '#e2e8f0';
@@ -239,48 +237,46 @@ async function downloadBadge() {
     ctx.fill();
     ctx.stroke();
     
-    // QR Code Image
     const qrCanvas = document.getElementById('qrCanvas');
-    ctx.drawImage(qrCanvas, 180, 490, 240, 240);
+    if (qrCanvas) {
+        ctx.drawImage(qrCanvas, 180, 490, 240, 240);
+    }
     
-    // Footer text
     ctx.font = '18px Inter, sans-serif';
     ctx.fillStyle = '#94a3b8';
     ctx.fillText('Escanea este código para', 300, 780);
     ctx.fillText('registrar asistencia', 300, 805);
     
-    // Outer Card border
     ctx.beginPath();
     ctx.strokeStyle = '#e2e8f0';
     ctx.lineWidth = 2;
     ctx.roundRect(1, 1, 598, 898, 24);
     ctx.stroke();
     
-    // Mobile Share / Download mechanism
+    // Mostrar modal de descarga directa compatible con Android
     const safeName = nombre.replace(/\s+/g, '_');
-    canvas.toBlob(async (blob) => {
-        const file = new File([blob], `Carnet_${safeName}.png`, { type: 'image/png' });
-        
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-            try {
-                await navigator.share({
-                    files: [file],
-                    title: 'Carnet de Asistencia',
-                    text: `Carnet de ${nombre}`
-                });
-            } catch (err) {
-                console.log('Compartir cancelado o no disponible', err);
-            }
-        } else {
-            // Fallback para navegadores web de escritorio
-            const link = document.createElement('a');
-            link.download = `Carnet_${safeName}.png`;
-            link.href = canvas.toDataURL('image/png');
-            link.click();
-        }
-    }, 'image/png');
-}
+    const dataUrl = canvas.toDataURL('image/png');
 
+    let modal = document.getElementById('imageModalDownload');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'imageModalDownload';
+        modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:9999; padding:20px; box-sizing:border-box;';
+        document.body.appendChild(modal);
+    }
+
+    modal.innerHTML = `
+        <div style="background:white; padding:20px; border-radius:12px; max-width:90%; max-height:85%; display:flex; flex-direction:column; align-items:center; box-sizing:border-box;">
+            <p style="margin:0 0 12px 0; font-family:Inter,sans-serif; font-size:15px; color:#1e293b; font-weight:600; text-align:center;">¡Carnet Generado con Éxito!</p>
+            <img src="${dataUrl}" style="max-width:100%; max-height:55vh; object-fit:contain; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:15px;" />
+            <div style="display:flex; gap:10px; width:100%;">
+                <a href="${dataUrl}" download="Carnet_${safeName}.png" style="flex:1; text-align:center; background:#10b981; color:white; text-decoration:none; padding:12px; border-radius:6px; font-weight:600; font-family:Inter,sans-serif;">Descargar</a>
+                <button onclick="document.getElementById('imageModalDownload').style.display='none'" style="flex:1; background:#ef4444; color:white; border:none; padding:12px; border-radius:6px; font-weight:600; font-family:Inter,sans-serif; cursor:pointer;">Cerrar</button>
+            </div>
+        </div>
+    `;
+    modal.style.display = 'flex';
+}
 
 // For re-downloading a badge from the workers list
 async function regenerateBadge(dni) {

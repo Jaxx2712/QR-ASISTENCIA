@@ -11,45 +11,47 @@
     <script src="js/auth.js"></script>
     <style>
         .badge-card {
-            width: 300px;
-            height: 450px;
+            width: 100%;
+            max-width: 280px;
+            height: 420px;
             background: #fff;
             border-radius: 12px;
             box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-            margin: 20px auto;
+            margin: 15px auto;
             position: relative;
             overflow: hidden;
             font-family: 'Inter', sans-serif;
             border: 1px solid #e2e8f0;
+            box-sizing: border-box;
         }
         .badge-header {
             background: linear-gradient(90deg, #1e3a5f 0%, #2d5a8e 100%);
-            height: 80px;
+            height: 75px;
             color: white;
             text-align: center;
-            padding-top: 15px;
+            padding-top: 12px;
         }
         .badge-empresa {
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 700;
             margin: 0;
             letter-spacing: 1px;
         }
         .badge-subtitle {
-            font-size: 10px;
+            font-size: 9px;
             opacity: 0.8;
-            margin-top: 5px;
+            margin-top: 4px;
         }
         .badge-avatar-container {
             position: absolute;
-            top: 70px;
+            top: 60px;
             left: 50%;
             transform: translateX(-50%);
-            width: 70px;
-            height: 70px;
+            width: 65px;
+            height: 65px;
             background: white;
             border-radius: 50%;
-            padding: 4px;
+            padding: 3px;
         }
         .badge-avatar {
             width: 100%;
@@ -60,36 +62,36 @@
             justify-content: center;
             color: white;
             font-weight: bold;
-            font-size: 32px;
+            font-size: 28px;
         }
         .badge-body {
-            padding-top: 70px;
+            padding-top: 60px;
             text-align: center;
         }
         .badge-nombre {
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 700;
             color: #1e293b;
             margin: 0;
         }
         .badge-cargo {
-            font-size: 13px;
+            font-size: 12px;
             color: #64748b;
-            margin: 5px 0 0 0;
+            margin: 4px 0 0 0;
         }
         .badge-dni {
-            font-size: 12px;
+            font-size: 11px;
             color: #94a3b8;
-            margin: 3px 0 15px 0;
+            margin: 2px 0 10px 0;
         }
         .badge-qr-container {
             border-top: 1px solid #e2e8f0;
-            padding-top: 15px;
+            padding-top: 10px;
         }
         .badge-footer {
-            font-size: 9px;
+            font-size: 8px;
             color: #94a3b8;
-            margin-top: 10px;
+            margin-top: 6px;
         }
         .notification {
             position: fixed;
@@ -114,31 +116,28 @@
         .card {
             background: #fff;
             border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 20px;
+            padding: 16px;
+            margin-bottom: 15px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            box-sizing: border-box;
         }
         .card h2 {
-            margin-bottom: 20px;
-            font-size: 1.2rem;
+            margin-bottom: 15px;
+            font-size: 1.1rem;
         }
         .form-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin-bottom: 20px;
+            gap: 12px;
+            margin-bottom: 15px;
         }
-        @media(max-width: 768px) {
-            .form-grid { grid-template-columns: 1fr; }
-            .card { padding: 16px; }
-            .card h2 { font-size: 1.05rem; margin-bottom: 16px; }
-        }
-        .form-group { margin-bottom: 15px; }
+        .form-group { margin-bottom: 12px; }
         .form-group label {
             display: block;
-            margin-bottom: 5px;
+            margin-bottom: 4px;
             font-weight: 500;
             color: #334155;
+            font-size: 0.9rem;
         }
         .form-control {
             width: 100%;
@@ -146,6 +145,7 @@
             border: 1px solid #cbd5e1;
             border-radius: 5px;
             font-family: inherit;
+            box-sizing: border-box;
         }
         .form-control:focus {
             outline: none;
@@ -153,25 +153,41 @@
             box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         }
         .btn {
-            padding: 10px 20px;
+            padding: 10px 18px;
             border: none;
             border-radius: 5px;
             cursor: pointer;
             font-weight: 600;
             display: inline-flex;
             align-items: center;
+            justify-content: center;
             gap: 8px;
             font-family: inherit;
         }
-        .btn-primary { background: #1e3a5f; color: white; }
+        .btn-primary { background: #1e3a5f; color: white; width: 100%; }
         .btn-primary:hover { background: #2d5a8e; }
-        .btn-secondary { background: #e2e8f0; color: #475569; }
+        .btn-secondary { background: #e2e8f0; color: #475569; width: 100%; }
         .btn-secondary:hover { background: #cbd5e1; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid #e2e8f0; }
         th { font-weight: 600; color: #475569; }
-        .btn-icon { background: none; border: none; color: #3b82f6; cursor: pointer; font-size: 16px; }
-        .btn-icon:hover { color: #2563eb; }
+
+        /* Contenedor adaptado para móviles */
+        .page-container {
+            padding: 12px;
+            max-width: 1000px;
+            margin: 0 auto;
+            box-sizing: border-box;
+            width: 100%;
+        }
+
+        @media(max-width: 768px) {
+            .form-grid { grid-template-columns: 1fr; }
+            .card { padding: 12px; }
+            .card h2 { font-size: 1rem; margin-bottom: 12px; }
+            .page-container { padding: 10px; }
+        }
     </style>
 </head>
 <body>
@@ -229,7 +245,7 @@
             </div>
         </header>
 
-        <div style="padding: 20px; max-width: 1000px; margin: 0 auto;">
+        <div class="page-container">
             <div class="card">
                 <h2><i class="fas fa-user-plus"></i> Registrar Nuevo Trabajador</h2>
                 <div class="form-grid">
@@ -249,7 +265,7 @@
                         <label for="workerEmpresa">Empresa (Opcional)</label>
                         <input type="text" id="workerEmpresa" class="form-control" placeholder="Ej: Constructora ABC">
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" style="grid-column: 1 / -1;">
                         <label for="workerFoto">Foto de Perfil (Opcional)</label>
                         <input type="file" id="workerFoto" class="form-control" accept="image/*">
                     </div>
@@ -276,13 +292,13 @@
                         <p class="badge-dni" id="badgeDni"></p>
                         
                         <div class="badge-qr-container">
-                            <canvas id="qrCanvas" style="width: 130px; height: 130px; border: 1px solid #e2e8f0; padding: 5px; border-radius: 5px; background: white;"></canvas>
+                            <canvas id="qrCanvas" style="width: 115px; height: 115px; border: 1px solid #e2e8f0; padding: 4px; border-radius: 5px; background: white;"></canvas>
                             <p class="badge-footer">Escanea este código para<br>registrar asistencia</p>
                         </div>
                     </div>
                 </div>
 
-                <div style="margin-top: 20px; display: flex; justify-content: center; gap: 10px;">
+                <div style="margin-top: 15px; display: flex; flex-direction: column; gap: 10px;">
                     <button class="btn btn-primary" onclick="downloadBadge()"><i class="fas fa-download"></i> Descargar Carnet</button>
                     <button class="btn btn-secondary" onclick="resetForm()"><i class="fas fa-plus"></i> Generar Otro</button>
                 </div>
@@ -290,7 +306,7 @@
 
             <div class="card">
                 <h2>Trabajadores Registrados</h2>
-                <div style="overflow-x: auto;">
+                <div style="overflow-x: auto; width: 100%;">
                     <table>
                         <thead>
                             <tr>
@@ -298,7 +314,7 @@
                                 <th>Nombre</th>
                                 <th>Cargo</th>
                                 <th>Empresa</th>
-                                <th>Fecha Registro</th>
+                                <th>Fecha</th>
                                 <th>Acción</th>
                             </tr>
                         </thead>
