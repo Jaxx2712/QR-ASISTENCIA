@@ -19,7 +19,6 @@
     "@capacitor/android": "^8.5.3",
     "@capacitor/cli": "^8.5.3",
     "@capacitor/core": "^8.5.3",
-    "@capacitor/splash-screen": "^8.0.2",
     "@libsql/client": "^0.18.0",
     "cors": "^2.8.6",
     "dotenv": "^18.0.8",

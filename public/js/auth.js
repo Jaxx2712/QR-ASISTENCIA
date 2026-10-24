@@ -1,5 +1,15 @@
 const API_URL = 'https://qr-asistencia-backend-keum.onrender.com';
 
+// Al cargar cualquier página, aplicar el tema guardado
+document.addEventListener("DOMContentLoaded", () => {
+    const savedTheme = localStorage.getItem("theme");
+    if (savedTheme === "dark") {
+        document.body.classList.add("dark-mode");
+    } else {
+        document.body.classList.remove("dark-mode");
+    }
+});
+
 // Client Authentication, Role Permissions and Theme Management
 
 (function () {

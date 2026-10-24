@@ -2,15 +2,6 @@
   "appId": "com.empresa.qrasistencia",
   "appName": "Asistencia QR",
   "webDir": "public",
-  "plugins": {
-    "SplashScreen": {
-      "launchShowDuration": 2000,
-      "backgroundColor": "#1e3a5f",
-      "showSpinner": false,
-      "splashFullScreen": true,
-      "splashImmersive": true
-    }
-  },
   "assets": {
     "icon": "assets/logo.png",
     "splash": "assets/splash.png"

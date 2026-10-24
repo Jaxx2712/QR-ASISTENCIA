@@ -9,11 +9,15 @@ import android.media.MediaScannerConnection;
 import android.util.Base64;
 import java.io.File;
 import java.io.FileOutputStream;
+import androidx.core.view.WindowCompat;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        // Oculta los bordes y permite que la app ocupe toda la pantalla de extremo a extremo
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+
         super.onCreate(savedInstanceState);
 
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT) {
