@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Reporte Diario de Asistencia - QR Asistencia</title>
+    <title>Reportes - Asistencia QR</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/styles.css">
@@ -18,6 +18,11 @@
             font-weight: 700;
             border: 1px solid #fde68a;
         }
+        body.dark-mode .badge-day {
+            background: rgba(245, 158, 11, 0.15);
+            color: #fbbf24;
+            border-color: rgba(245, 158, 11, 0.3);
+        }
     </style>
 </head>
 <body>
@@ -30,7 +35,7 @@
             <div class="sidebar-header">
                 <div class="sidebar-brand">
                     <i class="fa-solid fa-clipboard-list logo-icon" style="color: #f59e0b;"></i>
-                    <h2>QR Asistencia</h2>
+                    <h2>Asistencia QR</h2>
                 </div>
                 <button class="sidebar-close-btn" onclick="closeSidebar()" aria-label="Cerrar menú">
                     <i class="fa-solid fa-times"></i>
@@ -51,7 +56,7 @@
                 </a>
                 <a href="reportes.html" class="nav-item active nav-reportes">
                     <i class="fa-solid fa-clipboard-list"></i>
-                    <span>Reporte Diario</span>
+                    <span>Reportes</span>
                 </a>
             </nav>
             <div class="sidebar-footer">
@@ -67,7 +72,7 @@
                     <button class="menu-toggle" onclick="toggleSidebar()">
                         <i class="fa-solid fa-bars"></i>
                     </button>
-                    <h1 class="page-title">Reporte Diario</h1>
+                    <h1 class="page-title">Reportes</h1>
                 </div>
                 <div class="top-bar-right">
                     <div class="clock" id="clock">
@@ -85,25 +90,61 @@
                 <!-- Header Banner -->
                 <div class="report-header-banner">
                     <div class="report-title-group">
-                        <h2><i class="fa-solid fa-calendar-day" style="color: #f59e0b;"></i> Asistencia Diaria</h2>
-                        <p>Lista generada cada 24 horas (00:00 - 23:59). Registro de hora de entrada y hora de salida descargable en Excel.</p>
+                        <h2 id="reportBannerTitle"><i class="fa-solid fa-chart-pie" style="color: #f59e0b;"></i> Reportes de Asistencia</h2>
+                        <p id="reportBannerDesc">Consulta y exporta la asistencia en tiempo real de forma diaria, semanal o mensual.</p>
                     </div>
+                </div>
+
+                <!-- Subsecciones: Segmented Control Tabs -->
+                <div class="report-tabs-control">
+                    <button type="button" class="report-tab-btn active" id="tabDailyBtn" onclick="switchReportSubSection('daily')">
+                        <i class="fa-solid fa-calendar-day"></i> Reportes Diarios
+                    </button>
+                    <button type="button" class="report-tab-btn" id="tabWeeklyBtn" onclick="switchReportSubSection('weekly')">
+                        <i class="fa-solid fa-calendar-week"></i> Reportes Semanales
+                    </button>
+                    <button type="button" class="report-tab-btn" id="tabMonthlyBtn" onclick="switchReportSubSection('monthly')">
+                        <i class="fa-solid fa-calendar-days"></i> Reportes Mensuales
+                    </button>
                 </div>
 
                 <!-- Controls & Toolbar -->
                 <div class="report-toolbar">
-                    <div class="report-date-filter">
+                    <div class="report-date-filter" id="filterContainerDaily">
                         <label for="reportDate"><i class="fa-regular fa-calendar" style="color: #f59e0b;"></i> Fecha:</label>
-                        <input type="date" id="reportDate" class="report-date-input" onchange="loadDailyReport()">
+                        <input type="date" id="reportDate" class="report-date-input" onchange="loadCurrentReport()">
                         <button type="button" class="report-quick-btn" onclick="setTodayDate()">
                             <i class="fa-solid fa-calendar-check"></i> Hoy
                         </button>
-                        <button type="button" class="report-quick-btn" onclick="loadDailyReport()">
+                        <button type="button" class="report-quick-btn" onclick="loadCurrentReport()">
                             <i class="fa-solid fa-rotate"></i> Actualizar
                         </button>
                     </div>
+
+                    <div class="report-date-filter" id="filterContainerWeekly" style="display: none;">
+                        <label for="reportWeekDate"><i class="fa-regular fa-calendar-week" style="color: #f59e0b;"></i> Semana de:</label>
+                        <input type="date" id="reportWeekDate" class="report-date-input" onchange="loadCurrentReport()">
+                        <button type="button" class="report-quick-btn" onclick="setCurrentWeekDate()">
+                            <i class="fa-solid fa-calendar-check"></i> Esta Semana
+                        </button>
+                        <button type="button" class="report-quick-btn" onclick="loadCurrentReport()">
+                            <i class="fa-solid fa-rotate"></i> Actualizar
+                        </button>
+                    </div>
+
+                    <div class="report-date-filter" id="filterContainerMonthly" style="display: none;">
+                        <label for="reportMonth"><i class="fa-regular fa-calendar-days" style="color: #f59e0b;"></i> Mes:</label>
+                        <input type="month" id="reportMonth" class="report-date-input" onchange="loadCurrentReport()">
+                        <button type="button" class="report-quick-btn" onclick="setCurrentMonth()">
+                            <i class="fa-solid fa-calendar-check"></i> Este Mes
+                        </button>
+                        <button type="button" class="report-quick-btn" onclick="loadCurrentReport()">
+                            <i class="fa-solid fa-rotate"></i> Actualizar
+                        </button>
+                    </div>
+
                     <div class="report-actions">
-                        <button id="btnDownloadExcel" class="btn-excel" onclick="downloadExcelReport()">
+                        <button id="btnDownloadExcel" class="btn-excel" onclick="downloadCurrentExcelReport()">
                             <i class="fa-solid fa-file-excel"></i> Descargar Excel
                         </button>
                     </div>
@@ -113,29 +154,29 @@
                 <div class="report-stats-grid">
                     <div class="report-stat-card">
                         <div class="report-stat-icon blue">
-                            <i class="fa-solid fa-users"></i>
+                            <i class="fa-solid fa-users" id="statIcon1"></i>
                         </div>
                         <div class="report-stat-info">
-                            <h4>Asistieron Hoy</h4>
-                            <p id="statTotalAttended">0</p>
+                            <h4 id="statLabel1">Asistieron Hoy</h4>
+                            <p id="statVal1">0</p>
                         </div>
                     </div>
                     <div class="report-stat-card">
                         <div class="report-stat-icon green">
-                            <i class="fa-solid fa-user-check"></i>
+                            <i class="fa-solid fa-user-check" id="statIcon2"></i>
                         </div>
                         <div class="report-stat-info">
-                            <h4>En Sitio (Presentes)</h4>
-                            <p id="statPresent">0</p>
+                            <h4 id="statLabel2">En Sitio (Presentes)</h4>
+                            <p id="statVal2">0</p>
                         </div>
                     </div>
                     <div class="report-stat-card">
                         <div class="report-stat-icon orange">
-                            <i class="fa-solid fa-door-open"></i>
+                            <i class="fa-solid fa-door-open" id="statIcon3"></i>
                         </div>
                         <div class="report-stat-info">
-                            <h4>Salidas Registradas</h4>
-                            <p id="statExited">0</p>
+                            <h4 id="statLabel3">Salidas Registradas</h4>
+                            <p id="statVal3">0</p>
                         </div>
                     </div>
                 </div>
@@ -144,20 +185,20 @@
                 <div class="report-preview-card">
                     <div class="report-preview-header">
                         <h3><i class="fa-solid fa-table-cells" style="color: #107c41;"></i> Hoja de Asistencia</h3>
-                        <span id="badgeDiaTitle" class="badge-day">Dia ...</span>
+                        <span id="badgeDiaTitle" class="badge-day">Reporte</span>
                     </div>
 
                     <div class="table-responsive-excel">
                         <table class="excel-sheet-table" id="excelSheetTable">
                             <thead>
                                 <tr class="excel-title-row">
-                                    <th colspan="4" id="excelTableTitle" class="excel-title-cell">Dia ...</th>
+                                    <th colspan="4" id="excelTableTitle" class="excel-title-cell">Cargando reporte...</th>
                                 </tr>
-                                <tr class="excel-header-row">
+                                <tr class="excel-header-row" id="excelHeaderRow">
                                     <th class="excel-header-cell">DNI</th>
                                     <th class="excel-header-cell">Nombre</th>
-                                    <th class="excel-header-cell">hora de entrada</th>
-                                    <th class="excel-header-cell">hora de salida</th>
+                                    <th class="excel-header-cell" id="thCol3">hora de entrada</th>
+                                    <th class="excel-header-cell" id="thCol4">hora de salida</th>
                                 </tr>
                             </thead>
                             <tbody id="excelTableBody">

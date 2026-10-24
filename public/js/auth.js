@@ -25,6 +25,39 @@ function getAuthUser() {
     }
 }
 
+// Automatically attach Bearer token to all /api/ fetch requests
+(function () {
+    const originalFetch = window.fetch;
+    window.fetch = function (url, options = {}) {
+        const token = getAuthToken();
+        const urlStr = String(url);
+        if (token && urlStr.includes('/api/') && !urlStr.includes('/api/auth/login') && !urlStr.includes('/api/auth/register')) {
+            options = Object.assign({}, options);
+            if (options.headers instanceof Headers) {
+                if (!options.headers.has('Authorization')) {
+                    options.headers.set('Authorization', `Bearer ${token}`);
+                }
+            } else if (Array.isArray(options.headers)) {
+                options.headers = options.headers.slice();
+                options.headers.push(['Authorization', `Bearer ${token}`]);
+            } else {
+                options.headers = Object.assign({}, options.headers);
+                if (!options.headers['Authorization'] && !options.headers['authorization']) {
+                    options.headers['Authorization'] = `Bearer ${token}`;
+                }
+            }
+        }
+        return originalFetch.call(this, url, options).then(res => {
+            if (res.status === 401 && !window.location.pathname.endsWith('login.html')) {
+                localStorage.removeItem('qr_token');
+                localStorage.removeItem('qr_user');
+                window.location.replace('login.html');
+            }
+            return res;
+        });
+    };
+})();
+
 // Check session and permissions on every protected page
 function enforceAuth() {
     const isLoginPage = window.location.pathname.endsWith('login.html');

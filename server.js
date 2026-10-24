@@ -174,6 +174,79 @@ function formatTime12h(timeStr) {
 }
 
 // Authentication Helpers & Sessions
+const failedLoginAttempts = new Map(); // IP -> { count, firstAttempt }
+function checkLoginRateLimit(ip) {
+    const now = Date.now();
+    const entry = failedLoginAttempts.get(ip);
+    if (!entry) return true;
+    if (now - entry.firstAttempt > 15 * 60 * 1000) {
+        failedLoginAttempts.delete(ip);
+        return true;
+    }
+    return entry.count < 10;
+}
+function recordFailedLogin(ip) {
+    const now = Date.now();
+    const entry = failedLoginAttempts.get(ip) || { count: 0, firstAttempt: now };
+    if (now - entry.firstAttempt > 15 * 60 * 1000) {
+        entry.count = 1;
+        entry.firstAttempt = now;
+    } else {
+        entry.count++;
+    }
+    failedLoginAttempts.set(ip, entry);
+}
+function clearFailedLogin(ip) {
+    failedLoginAttempts.delete(ip);
+}
+
+function sanitizeForExcel(val) {
+    if (val === null || val === undefined) return '';
+    const str = String(val);
+    if (/^[=+\-@]/.test(str)) {
+        return "'" + str;
+    }
+    return str;
+}
+
+function getWeekRange(dateStr) {
+    const parts = dateStr.split('-');
+    const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+    const day = d.getDay();
+    const diffToMonday = (day === 0 ? -6 : 1) - day;
+    const monday = new Date(d);
+    monday.setDate(d.getDate() + diffToMonday);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+
+    const fmt = dt => {
+        const y = dt.getFullYear();
+        const m = String(dt.getMonth() + 1).padStart(2, '0');
+        const dayNum = String(dt.getDate()).padStart(2, '0');
+        return `${y}-${m}-${dayNum}`;
+    };
+
+    return { startDate: fmt(monday), endDate: fmt(sunday) };
+}
+
+function countWorkingDays(startDateStr, endDateStr, todayStr) {
+    const start = new Date(startDateStr + 'T12:00:00');
+    const end = new Date(endDateStr + 'T12:00:00');
+    const today = new Date(todayStr + 'T12:00:00');
+    const limit = end < today ? end : today;
+    
+    let count = 0;
+    const cur = new Date(start);
+    while (cur <= limit) {
+        const day = cur.getDay();
+        if (day !== 0) { // Lunes a Sábado laborables
+            count++;
+        }
+        cur.setDate(cur.getDate() + 1);
+    }
+    return Math.max(1, count);
+}
+
 function hashPassword(password) {
     const salt = crypto.randomBytes(16).toString('hex');
     const hash = crypto.scryptSync(password, salt, 64).toString('hex');
@@ -330,6 +403,11 @@ app.post('/api/auth/register', async (req, res) => {
 
 // POST /api/auth/login - Login with DNI
 app.post('/api/auth/login', async (req, res) => {
+    const ip = req.ip || req.connection.remoteAddress || 'unknown';
+    if (!checkLoginRateLimit(ip)) {
+        return res.status(429).json({ success: false, message: 'Demasiados intentos fallidos. Intenta nuevamente en 15 minutos.' });
+    }
+
     const { dni, identifier, password } = req.body;
     const loginDni = String(dni || identifier || '').trim();
     if (!loginDni || !password) {
@@ -359,15 +437,18 @@ app.post('/api/auth/login', async (req, res) => {
         }
 
         if (result.rows.length === 0) {
+            recordFailedLogin(ip);
             return res.status(401).json({ success: false, message: 'DNI o contraseña incorrectos.' });
         }
 
         const user = result.rows[0];
         const isValid = verifyPassword(password, user.salt, user.password_hash);
         if (!isValid) {
+            recordFailedLogin(ip);
             return res.status(401).json({ success: false, message: 'DNI o contraseña incorrectos.' });
         }
 
+        clearFailedLogin(ip);
         const userObj = {
             id: user.id,
             nombre: user.nombre,
@@ -417,38 +498,124 @@ app.post('/api/auth/logout', (req, res) => {
 
 // Routes
 
-// POST /api/workers - Register a worker
-app.post('/api/workers', async (req, res) => {
+// Helper to build standardized Excel sheets
+async function buildExcelSheet({ title, headers, rows, sheetName, res, filename }) {
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Asistencia QR';
+    wb.created = new Date();
+    const ws = wb.addWorksheet(sheetName || 'Reporte');
+
+    const fontNormal = { name: 'Calibri', size: 11, bold: false };
+    const fontHeader = { name: 'Calibri', size: 11, bold: true };
+    const centerAlign = { horizontal: 'center', vertical: 'middle' };
+    const thinBorder = {
+        top: { style: 'thin', color: { argb: 'FF000000' } },
+        left: { style: 'thin', color: { argb: 'FF000000' } },
+        bottom: { style: 'thin', color: { argb: 'FF000000' } },
+        right: { style: 'thin', color: { argb: 'FF000000' } }
+    };
+
+    // Row 1: Merged Title
+    const colCount = headers.length;
+    const endColLetter = String.fromCharCode(64 + colCount);
+    ws.mergeCells(`A1:${endColLetter}1`);
+    const titleCell = ws.getCell('A1');
+    titleCell.value = sanitizeForExcel(title);
+    titleCell.alignment = centerAlign;
+    titleCell.font = fontHeader;
+
+    // Row 2: Headers
+    const headerRow = ws.getRow(2);
+    headers.forEach((h, i) => {
+        const cell = headerRow.getCell(i + 1);
+        cell.value = h;
+        cell.alignment = centerAlign;
+        cell.font = fontHeader;
+    });
+
+    // Rows 3+: Data
+    rows.forEach((r, idx) => {
+        const row = ws.getRow(3 + idx);
+        r.forEach((val, colIdx) => {
+            const cell = row.getCell(colIdx + 1);
+            cell.value = sanitizeForExcel(val);
+            cell.alignment = centerAlign;
+            cell.font = fontNormal;
+        });
+    });
+
+    // Grid lines: minimum 15 total rows
+    const totalRows = Math.max(15, rows.length + 2);
+    for (let r = 1; r <= totalRows; r++) {
+        for (let c = 1; c <= colCount; c++) {
+            ws.getCell(r, c).border = thinBorder;
+            if (r > 2 + rows.length) {
+                ws.getCell(r, c).alignment = centerAlign;
+                ws.getCell(r, c).font = fontNormal;
+            }
+        }
+    }
+
+    ws.columns = [
+        { width: 16 },
+        { width: 28 },
+        { width: 20 },
+        { width: 20 }
+    ];
+
+    const buffer = await wb.xlsx.writeBuffer();
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+}
+
+// POST /api/workers - Register a worker (Admin only)
+app.post('/api/workers', requireAdmin, async (req, res) => {
     const { dni, nombre, cargo = '', empresa = '', foto = '' } = req.body;
     
     if (!dni || !nombre) {
-        return res.status(400).json({ success: false, message: 'DNI and nombre are required' });
+        return res.status(400).json({ success: false, message: 'DNI y nombre son requeridos.' });
     }
     
+    const cleanDni = String(dni).trim();
+    const cleanNombre = String(nombre).trim();
+    const cleanCargo = String(cargo || '').replace(/<[^>]*>/g, '').trim().substring(0, 100);
+    const cleanEmpresa = String(empresa || '').replace(/<[^>]*>/g, '').trim().substring(0, 100);
+
     // Strict validations
-    if (!/^\d{8}$/.test(dni)) {
+    if (!/^\d{8}$/.test(cleanDni)) {
         return res.status(400).json({ success: false, message: 'El DNI debe contener exactamente 8 números.' });
     }
-    if (!/^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/.test(nombre)) {
+    if (!/^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]{2,80}$/.test(cleanNombre)) {
         return res.status(400).json({ success: false, message: 'El nombre solo puede contener letras y espacios.' });
+    }
+
+    let cleanFoto = '';
+    if (foto && typeof foto === 'string' && foto.trim()) {
+        const trimmedFoto = foto.trim();
+        if (/^data:image\/(png|jpeg|jpg|webp);base64,/.test(trimmedFoto) && trimmedFoto.length <= 4 * 1024 * 1024) {
+            cleanFoto = trimmedFoto;
+        } else {
+            return res.status(400).json({ success: false, message: 'Formato de imagen inválido o excede el límite permitido.' });
+        }
     }
 
     try {
         await db.execute({
             sql: `INSERT INTO workers (dni, nombre, cargo, empresa, foto) VALUES (?, ?, ?, ?, ?)`,
-            args: [dni, nombre, cargo, empresa, foto]
+            args: [cleanDni, cleanNombre, cleanCargo, cleanEmpresa, cleanFoto]
         });
         res.json({ success: true, message: 'Trabajador registrado exitosamente.' });
     } catch (err) {
         if (err.message && err.message.includes('UNIQUE constraint failed')) {
-            return res.status(409).json({ success: false, message: 'Trabajador ya existe.' });
+            return res.status(409).json({ success: false, message: 'Trabajador ya existe con este DNI.' });
         }
         res.status(500).json({ success: false, message: err.message });
     }
 });
 
-// GET /api/workers - Get all workers
-app.get('/api/workers', async (req, res) => {
+// GET /api/workers - Get all workers (Admin only)
+app.get('/api/workers', requireAdmin, async (req, res) => {
     try {
         const result = await db.execute(`SELECT * FROM workers ORDER BY nombre`);
         res.json(result.rows);
@@ -457,8 +624,8 @@ app.get('/api/workers', async (req, res) => {
     }
 });
 
-// GET /api/workers/:dni - Get single worker
-app.get('/api/workers/:dni', async (req, res) => {
+// GET /api/workers/:dni - Get single worker (Admin or Supervisor for scanner)
+app.get('/api/workers/:dni', requireAuth, async (req, res) => {
     const dni = req.params.dni;
     if (!/^\d{8}$/.test(dni)) {
         return res.status(400).json({ success: false, message: 'DNI inválido.' });
@@ -469,7 +636,7 @@ app.get('/api/workers/:dni', async (req, res) => {
             args: [dni]
         });
         if (result.rows.length === 0) {
-            return res.status(404).json({ success: false, message: 'Trabajador no encontrado' });
+            return res.status(404).json({ success: false, message: 'Trabajador no encontrado.' });
         }
         res.json(result.rows[0]);
     } catch (err) {
@@ -477,8 +644,8 @@ app.get('/api/workers/:dni', async (req, res) => {
     }
 });
 
-// DELETE /api/workers/:dni - Delete worker and their attendance
-app.delete('/api/workers/:dni', async (req, res) => {
+// DELETE /api/workers/:dni - Delete worker and their attendance (Admin only)
+app.delete('/api/workers/:dni', requireAdmin, async (req, res) => {
     const dni = req.params.dni;
     if (!/^\d{8}$/.test(dni)) {
         return res.status(400).json({ success: false, message: 'DNI inválido.' });
@@ -500,8 +667,8 @@ app.delete('/api/workers/:dni', async (req, res) => {
     }
 });
 
-// POST /api/attendance - Record attendance
-app.post('/api/attendance', async (req, res) => {
+// POST /api/attendance - Record attendance (Admin or Supervisor)
+app.post('/api/attendance', requireAuth, async (req, res) => {
     const { worker_dni, tipo } = req.body;
     if (!worker_dni || !tipo || !['Entrada', 'Salida'].includes(tipo)) {
         return res.status(400).json({ success: false, message: 'Datos inválidos.' });
@@ -517,7 +684,7 @@ app.post('/api/attendance', async (req, res) => {
         });
 
         if (workerResult.rows.length === 0) {
-            return res.status(404).json({ success: false, message: 'Trabajador no encontrado' });
+            return res.status(404).json({ success: false, message: 'Trabajador no encontrado.' });
         }
 
         const worker = workerResult.rows[0];
@@ -534,8 +701,8 @@ app.post('/api/attendance', async (req, res) => {
     }
 });
 
-// GET /api/attendance/:dni - Get attendance for a specific worker
-app.get('/api/attendance/:dni', async (req, res) => {
+// GET /api/attendance/:dni - Get attendance for a specific worker (Admin only)
+app.get('/api/attendance/:dni', requireAdmin, async (req, res) => {
     const dni = req.params.dni;
     if (!/^\d{8}$/.test(dni)) {
         return res.status(400).json({ success: false, message: 'DNI inválido.' });
@@ -544,9 +711,8 @@ app.get('/api/attendance/:dni', async (req, res) => {
     let month = req.query.month;
     if (!month) {
         const { fecha } = getLocalTime();
-        month = fecha.substring(0, 7); // YYYY-MM
+        month = fecha.substring(0, 7);
     }
-    // Validate month format
     if (!/^\d{4}-\d{2}$/.test(month)) {
         return res.status(400).json({ success: false, message: 'Formato de mes inválido.' });
     }
@@ -562,9 +728,9 @@ app.get('/api/attendance/:dni', async (req, res) => {
     }
 });
 
-// GET /api/attendance - Get all recent attendance
-app.get('/api/attendance', async (req, res) => {
-    let limit = parseInt(req.query.limit) || 50;
+// GET /api/attendance - Get recent attendance (Admin or Supervisor)
+app.get('/api/attendance', requireAuth, async (req, res) => {
+    let limit = parseInt(req.query.limit, 10) || 50;
     if (limit < 1) limit = 1;
     if (limit > 200) limit = 200;
     try {
@@ -578,8 +744,8 @@ app.get('/api/attendance', async (req, res) => {
     }
 });
 
-// GET /api/dashboard - Dashboard stats
-app.get('/api/dashboard', async (req, res) => {
+// GET /api/dashboard - Dashboard stats (Admin only)
+app.get('/api/dashboard', requireAdmin, async (req, res) => {
     const { fecha } = getLocalTime();
     
     try {
@@ -613,8 +779,12 @@ app.get('/api/dashboard', async (req, res) => {
     }
 });
 
-// GET /api/reports/daily - Daily attendance report (00:00 - 23:59)
-app.get('/api/reports/daily', async (req, res) => {
+// =========================================================================
+// REPORTES (Diarios, Semanales y Mensuales)
+// =========================================================================
+
+// GET /api/reports/daily - Reporte Diario
+app.get('/api/reports/daily', requireAdmin, async (req, res) => {
     let fecha = req.query.fecha;
     if (!fecha) {
         fecha = getLocalTime().fecha;
@@ -662,8 +832,8 @@ app.get('/api/reports/daily', async (req, res) => {
     }
 });
 
-// GET /api/reports/daily/download - Download daily attendance report formatted as Excel (.xlsx) matching exact specification
-app.get('/api/reports/daily/download', async (req, res) => {
+// GET /api/reports/daily/download - Descarga Excel Diario
+app.get('/api/reports/daily/download', requireAdmin, async (req, res) => {
     let fecha = req.query.fecha;
     if (!fecha) {
         fecha = getLocalTime().fecha;
@@ -690,82 +860,243 @@ app.get('/api/reports/daily/download', async (req, res) => {
         });
 
         const dayNumber = parseInt(fecha.split('-')[2], 10);
-        const records = result.rows.map(row => ({
-            dni: row.dni,
-            nombre: row.nombre,
-            hora_entrada_fmt: formatTime12h(row.hora_entrada),
-            hora_salida_fmt: formatTime12h(row.hora_salida)
-        }));
+        const rows = result.rows.map(row => [
+            row.dni,
+            row.nombre,
+            formatTime12h(row.hora_entrada) || '',
+            formatTime12h(row.hora_salida) || ''
+        ]);
 
-        const wb = new ExcelJS.Workbook();
-        wb.creator = 'QR Asistencia';
-        wb.created = new Date();
-        const ws = wb.addWorksheet(`Dia ${dayNumber}`);
+        await buildExcelSheet({
+            title: `Dia ${dayNumber}`,
+            headers: ['DNI', 'Nombre', 'hora de entrada', 'hora de salida'],
+            rows,
+            sheetName: `Dia ${dayNumber}`,
+            res,
+            filename: `Reporte_Diario_Dia_${dayNumber}_${fecha}.xlsx`
+        });
+    } catch (err) {
+        res.status(500).send('Error al generar el reporte de Excel: ' + err.message);
+    }
+});
 
-        // Format definitions matching exact spreadsheet specifications
-        const fontNormal = { name: 'Calibri', size: 11, bold: false };
-        const centerAlign = { horizontal: 'center', vertical: 'middle' };
-        const thinBorder = {
-            top: { style: 'thin', color: { argb: 'FF000000' } },
-            left: { style: 'thin', color: { argb: 'FF000000' } },
-            bottom: { style: 'thin', color: { argb: 'FF000000' } },
-            right: { style: 'thin', color: { argb: 'FF000000' } }
-        };
+// GET /api/reports/weekly - Reporte Semanal
+app.get('/api/reports/weekly', requireAdmin, async (req, res) => {
+    let fecha = req.query.fecha;
+    const { fecha: todayFecha } = getLocalTime();
+    if (!fecha) fecha = todayFecha;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+        return res.status(400).json({ success: false, message: 'Formato de fecha inválido (YYYY-MM-DD).' });
+    }
 
-        // Row 1: Merged Title "Dia X"
-        ws.mergeCells('A1:D1');
-        const titleCell = ws.getCell('A1');
-        titleCell.value = `Dia ${dayNumber}`;
-        titleCell.alignment = centerAlign;
-        titleCell.font = fontNormal;
+    try {
+        const { startDate, endDate } = getWeekRange(fecha);
+        const totalWorkingDays = countWorkingDays(startDate, endDate, todayFecha);
 
-        // Row 2: Headers
-        const headers = ['DNI', 'Nombre', 'hora de entrada', 'hora de salida'];
-        const headerRow = ws.getRow(2);
-        headers.forEach((h, i) => {
-            const cell = headerRow.getCell(i + 1);
-            cell.value = h;
-            cell.alignment = centerAlign;
-            cell.font = fontNormal;
+        const result = await db.execute({
+            sql: `
+                SELECT 
+                    w.dni,
+                    w.nombre,
+                    COUNT(DISTINCT CASE WHEN a.tipo = 'Entrada' THEN a.fecha END) as dias_asistidos
+                FROM workers w
+                LEFT JOIN attendance a ON a.worker_dni = w.dni AND a.fecha BETWEEN ? AND ?
+                GROUP BY w.dni, w.nombre
+                ORDER BY w.nombre ASC
+            `,
+            args: [startDate, endDate]
         });
 
-        // Rows 3+: Worker Data
-        records.forEach((rec, idx) => {
-            const row = ws.getRow(3 + idx);
-            row.getCell(1).value = rec.dni;
-            row.getCell(2).value = rec.nombre;
-            row.getCell(3).value = rec.hora_entrada_fmt || '';
-            row.getCell(4).value = rec.hora_salida_fmt || '';
-            for (let c = 1; c <= 4; c++) {
-                row.getCell(c).alignment = centerAlign;
-                row.getCell(c).font = fontNormal;
-            }
+        const records = result.rows.map(row => {
+            const asistidos = Number(row.dias_asistidos || 0);
+            const faltados = Math.max(0, totalWorkingDays - asistidos);
+            return {
+                dni: row.dni,
+                nombre: row.nombre,
+                dias_asistidos: asistidos,
+                dias_faltados: faltados
+            };
         });
 
-        // Grid lines matching image: at least 15 rows formatted with thin borders
-        const totalRows = Math.max(15, records.length + 2);
-        for (let r = 1; r <= totalRows; r++) {
-            for (let c = 1; c <= 4; c++) {
-                ws.getCell(r, c).border = thinBorder;
-                if (r > 2 + records.length) {
-                    ws.getCell(r, c).alignment = centerAlign;
-                    ws.getCell(r, c).font = fontNormal;
-                }
-            }
-        }
+        res.json({
+            success: true,
+            fecha,
+            startDate,
+            endDate,
+            totalWorkingDays,
+            titulo: `Semana del ${startDate} al ${endDate}`,
+            records
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
 
-        // Set optimal column widths
-        ws.columns = [
-            { width: 16 },
-            { width: 26 },
-            { width: 22 },
-            { width: 22 }
-        ];
+// GET /api/reports/weekly/download - Descarga Excel Semanal
+app.get('/api/reports/weekly/download', requireAdmin, async (req, res) => {
+    let fecha = req.query.fecha;
+    const { fecha: todayFecha } = getLocalTime();
+    if (!fecha) fecha = todayFecha;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+        return res.status(400).send('Formato de fecha inválido (YYYY-MM-DD).');
+    }
 
-        const buffer = await wb.xlsx.writeBuffer();
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', `attachment; filename="Reporte_Dia_${dayNumber}_${fecha}.xlsx"`);
-        res.send(buffer);
+    try {
+        const { startDate, endDate } = getWeekRange(fecha);
+        const totalWorkingDays = countWorkingDays(startDate, endDate, todayFecha);
+
+        const result = await db.execute({
+            sql: `
+                SELECT 
+                    w.dni,
+                    w.nombre,
+                    COUNT(DISTINCT CASE WHEN a.tipo = 'Entrada' THEN a.fecha END) as dias_asistidos
+                FROM workers w
+                LEFT JOIN attendance a ON a.worker_dni = w.dni AND a.fecha BETWEEN ? AND ?
+                GROUP BY w.dni, w.nombre
+                ORDER BY w.nombre ASC
+            `,
+            args: [startDate, endDate]
+        });
+
+        const rows = result.rows.map(row => {
+            const asistidos = Number(row.dias_asistidos || 0);
+            const faltados = Math.max(0, totalWorkingDays - asistidos);
+            return [
+                row.dni,
+                row.nombre,
+                asistidos,
+                faltados
+            ];
+        });
+
+        await buildExcelSheet({
+            title: `Reporte Semanal (${startDate} al ${endDate})`,
+            headers: ['DNI', 'Nombre', 'dias asistidos', 'dias faltados'],
+            rows,
+            sheetName: 'Reporte Semanal',
+            res,
+            filename: `Reporte_Semanal_${startDate}_${endDate}.xlsx`
+        });
+    } catch (err) {
+        res.status(500).send('Error al generar el reporte de Excel: ' + err.message);
+    }
+});
+
+// GET /api/reports/monthly - Reporte Mensual
+app.get('/api/reports/monthly', requireAdmin, async (req, res) => {
+    let mes = req.query.mes;
+    const { fecha: todayFecha } = getLocalTime();
+    if (!mes) mes = todayFecha.substring(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(mes)) {
+        return res.status(400).json({ success: false, message: 'Formato de mes inválido (YYYY-MM).' });
+    }
+
+    try {
+        const [yearStr, monthStr] = mes.split('-');
+        const year = parseInt(yearStr, 10);
+        const month = parseInt(monthStr, 10);
+        const daysInMonth = new Date(year, month, 0).getDate();
+        const startDate = `${mes}-01`;
+        const endDate = `${mes}-${String(daysInMonth).padStart(2, '0')}`;
+        const totalWorkingDays = countWorkingDays(startDate, endDate, todayFecha);
+
+        const result = await db.execute({
+            sql: `
+                SELECT 
+                    w.dni,
+                    w.nombre,
+                    COUNT(DISTINCT CASE WHEN a.tipo = 'Entrada' THEN a.fecha END) as dias_asistidos
+                FROM workers w
+                LEFT JOIN attendance a ON a.worker_dni = w.dni AND a.fecha LIKE ?
+                GROUP BY w.dni, w.nombre
+                ORDER BY w.nombre ASC
+            `,
+            args: [`${mes}%`]
+        });
+
+        const records = result.rows.map(row => {
+            const asistidos = Number(row.dias_asistidos || 0);
+            const faltados = Math.max(0, totalWorkingDays - asistidos);
+            return {
+                dni: row.dni,
+                nombre: row.nombre,
+                dias_asistidos: asistidos,
+                dias_faltados: faltados
+            };
+        });
+
+        const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+        const monthName = monthNames[month - 1] || mes;
+
+        res.json({
+            success: true,
+            mes,
+            startDate,
+            endDate,
+            totalWorkingDays,
+            titulo: `Mes de ${monthName} ${year}`,
+            records
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// GET /api/reports/monthly/download - Descarga Excel Mensual
+app.get('/api/reports/monthly/download', requireAdmin, async (req, res) => {
+    let mes = req.query.mes;
+    const { fecha: todayFecha } = getLocalTime();
+    if (!mes) mes = todayFecha.substring(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(mes)) {
+        return res.status(400).send('Formato de mes inválido (YYYY-MM).');
+    }
+
+    try {
+        const [yearStr, monthStr] = mes.split('-');
+        const year = parseInt(yearStr, 10);
+        const month = parseInt(monthStr, 10);
+        const daysInMonth = new Date(year, month, 0).getDate();
+        const startDate = `${mes}-01`;
+        const endDate = `${mes}-${String(daysInMonth).padStart(2, '0')}`;
+        const totalWorkingDays = countWorkingDays(startDate, endDate, todayFecha);
+
+        const result = await db.execute({
+            sql: `
+                SELECT 
+                    w.dni,
+                    w.nombre,
+                    COUNT(DISTINCT CASE WHEN a.tipo = 'Entrada' THEN a.fecha END) as dias_asistidos
+                FROM workers w
+                LEFT JOIN attendance a ON a.worker_dni = w.dni AND a.fecha LIKE ?
+                GROUP BY w.dni, w.nombre
+                ORDER BY w.nombre ASC
+            `,
+            args: [`${mes}%`]
+        });
+
+        const rows = result.rows.map(row => {
+            const asistidos = Number(row.dias_asistidos || 0);
+            const faltados = Math.max(0, totalWorkingDays - asistidos);
+            return [
+                row.dni,
+                row.nombre,
+                asistidos,
+                faltados
+            ];
+        });
+
+        const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+        const monthName = monthNames[month - 1] || mes;
+
+        await buildExcelSheet({
+            title: `Reporte Mensual (${monthName} ${year})`,
+            headers: ['DNI', 'Nombre', 'dias asistidos', 'dias faltados'],
+            rows,
+            sheetName: `Mes ${monthName}`,
+            res,
+            filename: `Reporte_Mensual_${mes}.xlsx`
+        });
     } catch (err) {
         res.status(500).send('Error al generar el reporte de Excel: ' + err.message);
     }

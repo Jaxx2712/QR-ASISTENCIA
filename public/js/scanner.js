@@ -1,6 +1,16 @@
 let html5QrcodeScanner = null;
 let activeWorkerData = null;
 
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     startClock();
     loadRecentActivity();
@@ -164,6 +174,11 @@ async function loadRecentActivity() {
             const isEntrada = record.tipo === 'Entrada';
             const icon = isEntrada ? 'fa-sign-in-alt' : 'fa-sign-out-alt';
             const colorClass = isEntrada ? 'entry' : 'exit';
+            const safeName = escapeHtml(record.nombre || record.name);
+            const safeDni = escapeHtml(record.worker_dni || record.id);
+            const safeTipo = escapeHtml(record.tipo || record.type);
+            const safeHora = escapeHtml(record.hora || '');
+            const safeFecha = escapeHtml(record.fecha || '');
             
             container.innerHTML += `
                 <div class="activity-item ${colorClass}">
@@ -171,12 +186,12 @@ async function loadRecentActivity() {
                         <i class="fas ${icon}"></i>
                     </div>
                     <div class="activity-info">
-                        <span class="activity-name">${record.nombre || record.name}</span>
-                        <span class="activity-detail">DNI: ${record.worker_dni || record.id} • ${record.tipo || record.type}</span>
+                        <span class="activity-name">${safeName}</span>
+                        <span class="activity-detail">DNI: ${safeDni} • ${safeTipo}</span>
                     </div>
                     <div class="activity-time">
-                        ${record.hora || ''}<br>
-                        <small>${record.fecha || ''}</small>
+                        ${safeHora}<br>
+                        <small>${safeFecha}</small>
                     </div>
                 </div>
             `;

@@ -1,23 +1,22 @@
-// Daily Attendance Report Functionality
+// Reports Functionality: Diarios, Semanales y Mensuales
 
+let currentSubSection = 'daily'; // 'daily' | 'weekly' | 'monthly'
 let currentRecords = [];
-let currentFecha = '';
-let currentDia = 1;
 
 document.addEventListener('DOMContentLoaded', () => {
-    initDate();
+    initFilters();
     startClock();
-    loadDailyReport();
+    loadCurrentReport();
 
-    // Auto-refresh every 30 seconds to show live entries and exits
+    // Auto-refresh every 30 seconds
     setInterval(() => {
-        loadDailyReport(true);
+        loadCurrentReport(true);
     }, 30000);
 });
 
 // Helper to escape HTML and prevent XSS
 function escapeHtml(str) {
-    if (!str) return '';
+    if (str === null || str === undefined) return '';
     return String(str)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
@@ -54,66 +53,190 @@ function startClock() {
     setInterval(updateTime, 1000);
 }
 
-// Initialize date input to today
-function initDate() {
-    const dateInput = document.getElementById('reportDate');
-    if (!dateInput) return;
-    
+// Format local date YYYY-MM-DD
+function getTodayString() {
     const now = new Date();
-    // Use Peru timezone / local date
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const todayStr = `${year}-${month}-${day}`;
-    
-    dateInput.value = todayStr;
-    currentFecha = todayStr;
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+function getCurrentMonthString() {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+}
+
+// Initialize filter values
+function initFilters() {
+    const today = getTodayString();
+    const curMonth = getCurrentMonthString();
+
+    const dateInput = document.getElementById('reportDate');
+    if (dateInput && !dateInput.value) dateInput.value = today;
+
+    const weekInput = document.getElementById('reportWeekDate');
+    if (weekInput && !weekInput.value) weekInput.value = today;
+
+    const monthInput = document.getElementById('reportMonth');
+    if (monthInput && !monthInput.value) monthInput.value = curMonth;
 }
 
 function setTodayDate() {
-    initDate();
-    loadDailyReport();
+    const dateInput = document.getElementById('reportDate');
+    if (dateInput) dateInput.value = getTodayString();
+    loadCurrentReport();
 }
 
-// Load daily attendance from API
+function setCurrentWeekDate() {
+    const weekInput = document.getElementById('reportWeekDate');
+    if (weekInput) weekInput.value = getTodayString();
+    loadCurrentReport();
+}
+
+function setCurrentMonth() {
+    const monthInput = document.getElementById('reportMonth');
+    if (monthInput) monthInput.value = getCurrentMonthString();
+    loadCurrentReport();
+}
+
+// Switch between sub-sections
+function switchReportSubSection(section) {
+    if (currentSubSection === section) return;
+    currentSubSection = section;
+
+    // Update buttons active state
+    document.getElementById('tabDailyBtn').classList.toggle('active', section === 'daily');
+    document.getElementById('tabWeeklyBtn').classList.toggle('active', section === 'weekly');
+    document.getElementById('tabMonthlyBtn').classList.toggle('active', section === 'monthly');
+
+    // Toggle filter bars
+    document.getElementById('filterContainerDaily').style.display = section === 'daily' ? 'flex' : 'none';
+    document.getElementById('filterContainerWeekly').style.display = section === 'weekly' ? 'flex' : 'none';
+    document.getElementById('filterContainerMonthly').style.display = section === 'monthly' ? 'flex' : 'none';
+
+    // Update descriptions and headers
+    const bannerTitle = document.getElementById('reportBannerTitle');
+    const bannerDesc = document.getElementById('reportBannerDesc');
+    const thCol3 = document.getElementById('thCol3');
+    const thCol4 = document.getElementById('thCol4');
+    const btnExcel = document.getElementById('btnDownloadExcel');
+
+    if (section === 'daily') {
+        bannerTitle.innerHTML = '<i class="fa-solid fa-calendar-day" style="color: #f59e0b;"></i> Reportes Diarios';
+        bannerDesc.textContent = 'Registro de asistencia diaria: DNI, Nombre, Hora de entrada y Hora de salida.';
+        thCol3.textContent = 'hora de entrada';
+        thCol4.textContent = 'hora de salida';
+        btnExcel.innerHTML = '<i class="fa-solid fa-file-excel"></i> Descargar Excel Diario';
+        document.getElementById('statLabel1').textContent = 'Asistieron Hoy';
+        document.getElementById('statLabel2').textContent = 'En Sitio (Presentes)';
+        document.getElementById('statLabel3').textContent = 'Salidas Registradas';
+    } else if (section === 'weekly') {
+        bannerTitle.innerHTML = '<i class="fa-solid fa-calendar-week" style="color: #3b82f6;"></i> Reportes Semanales';
+        bannerDesc.textContent = 'Resumen semanal de asistencia: DNI, Nombre, Días asistidos y Días faltados.';
+        thCol3.textContent = 'dias asistidos';
+        thCol4.textContent = 'dias faltados';
+        btnExcel.innerHTML = '<i class="fa-solid fa-file-excel"></i> Descargar Excel Semanal';
+        document.getElementById('statLabel1').textContent = 'Total Trabajadores';
+        document.getElementById('statLabel2').textContent = 'Promedio Días Asist.';
+        document.getElementById('statLabel3').textContent = 'Días Faltados Totales';
+    } else if (section === 'monthly') {
+        bannerTitle.innerHTML = '<i class="fa-solid fa-calendar-days" style="color: #10b981;"></i> Reportes Mensuales';
+        bannerDesc.textContent = 'Balance mensual de asistencia: DNI, Nombre, Días asistidos y Días faltados.';
+        thCol3.textContent = 'dias asistidos';
+        thCol4.textContent = 'dias faltados';
+        btnExcel.innerHTML = '<i class="fa-solid fa-file-excel"></i> Descargar Excel Mensual';
+        document.getElementById('statLabel1').textContent = 'Total Trabajadores';
+        document.getElementById('statLabel2').textContent = 'Promedio Días Asist.';
+        document.getElementById('statLabel3').textContent = 'Días Faltados Totales';
+    }
+
+    loadCurrentReport();
+}
+
+// Router to load the active report
+function loadCurrentReport(isSilent = false) {
+    if (currentSubSection === 'daily') {
+        loadDailyReport(isSilent);
+    } else if (currentSubSection === 'weekly') {
+        loadWeeklyReport(isSilent);
+    } else if (currentSubSection === 'monthly') {
+        loadMonthlyReport(isSilent);
+    }
+}
+
+// Load daily report
 async function loadDailyReport(isSilent = false) {
     const dateInput = document.getElementById('reportDate');
-    const selectedDate = dateInput ? dateInput.value : currentFecha;
-    
-    if (!selectedDate) return;
-    currentFecha = selectedDate;
+    const selectedDate = (dateInput && dateInput.value) ? dateInput.value : getTodayString();
 
     try {
-        const res = await fetch(`${API_URL}/api/reports/daily?fecha=${selectedDate}`);
-        if (!res.ok) throw new Error('Error al consultar el reporte');
+        const res = await fetch(`${API_URL}/api/reports/daily?fecha=${encodeURIComponent(selectedDate)}`);
+        if (!res.ok) throw new Error('Error al consultar el reporte diario');
         const data = await res.json();
 
         currentRecords = data.records || [];
-        currentDia = data.dia || parseInt(selectedDate.split('-')[2], 10);
-
-        renderReport(data);
+        renderDailyTable(data);
     } catch (err) {
         console.error('Error cargando reporte diario:', err);
         if (!isSilent) {
-            alert('No se pudo cargar el reporte: ' + err.message);
+            alert('No se pudo cargar el reporte diario: ' + err.message);
         }
     }
 }
 
-// Render Table and Stats
-function renderReport(data) {
+// Load weekly report
+async function loadWeeklyReport(isSilent = false) {
+    const weekInput = document.getElementById('reportWeekDate');
+    const selectedDate = (weekInput && weekInput.value) ? weekInput.value : getTodayString();
+
+    try {
+        const res = await fetch(`${API_URL}/api/reports/weekly?fecha=${encodeURIComponent(selectedDate)}`);
+        if (!res.ok) throw new Error('Error al consultar el reporte semanal');
+        const data = await res.json();
+
+        currentRecords = data.records || [];
+        renderWeeklyTable(data);
+    } catch (err) {
+        console.error('Error cargando reporte semanal:', err);
+        if (!isSilent) {
+            alert('No se pudo cargar el reporte semanal: ' + err.message);
+        }
+    }
+}
+
+// Load monthly report
+async function loadMonthlyReport(isSilent = false) {
+    const monthInput = document.getElementById('reportMonth');
+    const selectedMonth = (monthInput && monthInput.value) ? monthInput.value : getCurrentMonthString();
+
+    try {
+        const res = await fetch(`${API_URL}/api/reports/monthly?mes=${encodeURIComponent(selectedMonth)}`);
+        if (!res.ok) throw new Error('Error al consultar el reporte mensual');
+        const data = await res.json();
+
+        currentRecords = data.records || [];
+        renderMonthlyTable(data);
+    } catch (err) {
+        console.error('Error cargando reporte mensual:', err);
+        if (!isSilent) {
+            alert('No se pudo cargar el reporte mensual: ' + err.message);
+        }
+    }
+}
+
+// Render Daily Table
+function renderDailyTable(data) {
     const diaNumber = data.dia;
     const records = data.records || [];
     
-    // Update titles
-    const titleText = `Dia ${diaNumber}`;
-    const excelTableTitle = document.getElementById('excelTableTitle');
-    const badgeDiaTitle = document.getElementById('badgeDiaTitle');
-    if (excelTableTitle) excelTableTitle.textContent = titleText;
-    if (badgeDiaTitle) badgeDiaTitle.textContent = titleText;
+    const titleText = data.titulo || `Dia ${diaNumber}`;
+    document.getElementById('excelTableTitle').textContent = titleText;
+    document.getElementById('badgeDiaTitle').textContent = `Dia ${diaNumber}`;
 
-    // Calculate stats
-    const totalAttended = records.length;
+    let totalAttended = records.length;
     let presentCount = 0;
     let exitedCount = 0;
 
@@ -125,34 +248,94 @@ function renderReport(data) {
         }
     });
 
-    const statTotalEl = document.getElementById('statTotalAttended');
-    const statPresentEl = document.getElementById('statPresent');
-    const statExitedEl = document.getElementById('statExited');
+    document.getElementById('statVal1').textContent = totalAttended;
+    document.getElementById('statVal2').textContent = presentCount;
+    document.getElementById('statVal3').textContent = exitedCount;
 
-    if (statTotalEl) statTotalEl.textContent = totalAttended;
-    if (statPresentEl) statPresentEl.textContent = presentCount;
-    if (statExitedEl) statExitedEl.textContent = exitedCount;
+    renderTableBody(records, rec => `
+        <td>${escapeHtml(rec.dni)}</td>
+        <td>${escapeHtml(rec.nombre)}</td>
+        <td>${escapeHtml(rec.hora_entrada_fmt || '')}</td>
+        <td>${escapeHtml(rec.hora_salida_fmt || '')}</td>
+    `);
+}
 
-    // Render table body
+// Render Weekly Table
+function renderWeeklyTable(data) {
+    const records = data.records || [];
+    const titleText = data.titulo || 'Reporte Semanal';
+    
+    document.getElementById('excelTableTitle').textContent = titleText;
+    document.getElementById('badgeDiaTitle').textContent = `Semana (${data.startDate || ''} al ${data.endDate || ''})`;
+
+    const totalWorkers = records.length;
+    let totalAsistidos = 0;
+    let totalFaltados = 0;
+
+    records.forEach(r => {
+        totalAsistidos += Number(r.dias_asistidos || 0);
+        totalFaltados += Number(r.dias_faltados || 0);
+    });
+
+    const avgAsist = totalWorkers > 0 ? (totalAsistidos / totalWorkers).toFixed(1) : '0';
+
+    document.getElementById('statVal1').textContent = totalWorkers;
+    document.getElementById('statVal2').textContent = avgAsist;
+    document.getElementById('statVal3').textContent = totalFaltados;
+
+    renderTableBody(records, rec => `
+        <td>${escapeHtml(rec.dni)}</td>
+        <td>${escapeHtml(rec.nombre)}</td>
+        <td>${escapeHtml(rec.dias_asistidos)}</td>
+        <td>${escapeHtml(rec.dias_faltados)}</td>
+    `);
+}
+
+// Render Monthly Table
+function renderMonthlyTable(data) {
+    const records = data.records || [];
+    const titleText = data.titulo || `Mes ${data.mes || ''}`;
+    
+    document.getElementById('excelTableTitle').textContent = titleText;
+    document.getElementById('badgeDiaTitle').textContent = `Mes (${data.mes || ''})`;
+
+    const totalWorkers = records.length;
+    let totalAsistidos = 0;
+    let totalFaltados = 0;
+
+    records.forEach(r => {
+        totalAsistidos += Number(r.dias_asistidos || 0);
+        totalFaltados += Number(r.dias_faltados || 0);
+    });
+
+    const avgAsist = totalWorkers > 0 ? (totalAsistidos / totalWorkers).toFixed(1) : '0';
+
+    document.getElementById('statVal1').textContent = totalWorkers;
+    document.getElementById('statVal2').textContent = avgAsist;
+    document.getElementById('statVal3').textContent = totalFaltados;
+
+    renderTableBody(records, rec => `
+        <td>${escapeHtml(rec.dni)}</td>
+        <td>${escapeHtml(rec.nombre)}</td>
+        <td>${escapeHtml(rec.dias_asistidos)}</td>
+        <td>${escapeHtml(rec.dias_faltados)}</td>
+    `);
+}
+
+// Common Table Body Renderer with 15 rows minimum formatting
+function renderTableBody(records, rowFormatter) {
     const tbody = document.getElementById('excelTableBody');
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    // Render worker records
     records.forEach(rec => {
         const tr = document.createElement('tr');
         tr.className = 'excel-data-row';
-        tr.innerHTML = `
-            <td>${escapeHtml(rec.dni)}</td>
-            <td>${escapeHtml(rec.nombre)}</td>
-            <td>${escapeHtml(rec.hora_entrada_fmt || '')}</td>
-            <td>${escapeHtml(rec.hora_salida_fmt || '')}</td>
-        `;
+        tr.innerHTML = rowFormatter(rec);
         tbody.appendChild(tr);
     });
 
-    // To mirror the image format exactly, render empty bordered rows up to 15 total rows
-    const minRows = 13; // 2 header rows + 13 data rows = 15 rows total in sheet
+    const minRows = 13;
     const emptyRowsToAdd = Math.max(0, minRows - records.length);
     for (let i = 0; i < emptyRowsToAdd; i++) {
         const emptyTr = document.createElement('tr');
@@ -167,19 +350,28 @@ function renderReport(data) {
     }
 }
 
-// Download Excel report
-function downloadExcelReport() {
-    const dateInput = document.getElementById('reportDate');
-    const fecha = dateInput ? dateInput.value : currentFecha;
-    if (!fecha) {
-        alert('Selecciona una fecha válida');
-        return;
+// Download Excel report according to active sub-section
+function downloadCurrentExcelReport() {
+    const token = getAuthToken() || '';
+    const tokenQuery = token ? `&token=${encodeURIComponent(token)}` : '';
+    let downloadUrl = '';
+
+    if (currentSubSection === 'daily') {
+        const dateInput = document.getElementById('reportDate');
+        const fecha = (dateInput && dateInput.value) ? dateInput.value : getTodayString();
+        downloadUrl = `${API_URL}/api/reports/daily/download?fecha=${encodeURIComponent(fecha)}${tokenQuery}`;
+    } else if (currentSubSection === 'weekly') {
+        const weekInput = document.getElementById('reportWeekDate');
+        const fecha = (weekInput && weekInput.value) ? weekInput.value : getTodayString();
+        downloadUrl = `${API_URL}/api/reports/weekly/download?fecha=${encodeURIComponent(fecha)}${tokenQuery}`;
+    } else if (currentSubSection === 'monthly') {
+        const monthInput = document.getElementById('reportMonth');
+        const mes = (monthInput && monthInput.value) ? monthInput.value : getCurrentMonthString();
+        downloadUrl = `${API_URL}/api/reports/monthly/download?mes=${encodeURIComponent(mes)}${tokenQuery}`;
     }
 
-    // Direct download from server (guarantees native Excel styling, exact borders and fonts)
-    const downloadUrl = `${API_URL}/api/reports/daily/download?fecha=${encodeURIComponent(fecha)}`;
-    
-    // Trigger download
+    if (!downloadUrl) return;
+
     const link = document.createElement('a');
     link.href = downloadUrl;
     link.setAttribute('download', '');
@@ -209,4 +401,3 @@ function closeSidebar() {
     toggleSidebar(false);
 }
 window.closeSidebar = closeSidebar;
-

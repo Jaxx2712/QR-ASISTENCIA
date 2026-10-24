@@ -1,5 +1,19 @@
 // Main dashboard functionality
 
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function isValidImageDataUrl(url) {
+    return typeof url === 'string' && /^data:image\/(png|jpeg|jpg|webp);base64,/.test(url.trim());
+}
+
 let allWorkers = [];
 let currentModalWorkerDni = null;
 let currentModalYear = new Date().getFullYear();
@@ -109,11 +123,15 @@ async function renderWorkers(workersToRender) {
         const card = document.createElement('div');
         card.className = 'worker-card';
         
+        const safeNombre = escapeHtml(worker.nombre);
+        const safeDni = escapeHtml(worker.dni);
+        const safeCargo = escapeHtml(worker.cargo || 'Empleado');
+
         const avatarColor = getAvatarColor(worker.nombre);
         const initials = worker.nombre.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
         
         let avatarHtml = `<div class="avatar" style="background-color: ${avatarColor}">${initials}</div>`;
-        if (worker.foto) {
+        if (worker.foto && isValidImageDataUrl(worker.foto)) {
             avatarHtml = `<div class="avatar" style="background-color: transparent; overflow: hidden;"><img src="${worker.foto}" style="width: 100%; height: 100%; object-fit: cover;"></div>`;
         }
         
@@ -137,18 +155,18 @@ async function renderWorkers(workersToRender) {
         const miniCalendarHtml = generateMiniCalendar(year, month, attendanceDays);
 
         card.innerHTML = `
-            <button class="btn-delete" onclick="deleteWorker('${worker.dni}')" title="Eliminar trabajador">
+            <button class="btn-delete" onclick="deleteWorker('${safeDni}')" title="Eliminar trabajador">
                 <i class="fa-solid fa-trash"></i>
             </button>
             <div class="card-header">
                 ${avatarHtml}
                 <div class="worker-info">
-                    <div class="worker-name" title="${worker.nombre}">${worker.nombre}</div>
-                    <div class="worker-meta">DNI: ${worker.dni} | ${worker.cargo || 'Empleado'}</div>
+                    <div class="worker-name" title="${safeNombre}">${safeNombre}</div>
+                    <div class="worker-meta">DNI: ${safeDni} | ${safeCargo}</div>
                 </div>
             </div>
             ${miniCalendarHtml}
-            <button class="btn-detail" onclick="showWorkerDetail('${worker.dni}')">Ver Detalle</button>
+            <button class="btn-detail" onclick="showWorkerDetail('${safeDni}')">Ver Detalle</button>
         `;
         
         grid.appendChild(card);
@@ -237,7 +255,7 @@ async function showWorkerDetail(dni) {
 
     // Set Header
     const avatarEl = document.getElementById('modalAvatar');
-    if (worker.foto) {
+    if (worker.foto && isValidImageDataUrl(worker.foto)) {
         avatarEl.innerHTML = `<img src="${worker.foto}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
         avatarEl.style.backgroundColor = 'transparent';
     } else {
