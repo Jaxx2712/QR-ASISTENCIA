@@ -1916,3 +1916,34 @@ body.dark-mode .auth-alert-minimal.success {
     color: #6ee7b7;
     border-color: rgba(16, 185, 129, 0.25);
 }
+
+/* Estilo moderno y cohesivo para el botón de descarga */
+.btn-download-custom {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: #ffffff;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    font-family: 'Inter', sans-serif;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+    transition: all 0.2s ease-in-out;
+    width: 100%; /* Se adapta perfecto al ancho en celulares */
+}
+
+.btn-download-custom:hover {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35);
+    transform: translateY(-1px);
+}
+
+.btn-download-custom:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);
+}
