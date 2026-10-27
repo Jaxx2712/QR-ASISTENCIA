@@ -137,15 +137,21 @@ async function renderWorkers(workersToRender) {
         
         // Fetch attendance for mini calendar
         let attendanceDays = new Set();
+        // CÓDIGO ACTUALIZADO PARA MINI-CALENDARIOS:
         try {
             const attRes = await fetch(`${API_URL}/api/attendance/${worker.dni}?month=${year}-${String(month + 1).padStart(2, '0')}`);
             if (attRes.ok) {
                 const attData = await attRes.json();
                 attData.forEach(record => {
-                    const date = new Date(record.fecha);
-                    // Handle timezone offsets if necessary, assuming YYYY-MM-DD
-                    const day = parseInt(record.fecha.split('-')[2], 10);
-                    attendanceDays.add(day);
+                    // Tomamos el timestamp UTC o construimos la fecha UTC exacta
+                    const utcString = record.timestamp || `${record.fecha}T${record.hora || '00:00:00'}Z`;
+                    const localDate = new Date(utcString);
+                    
+                    // Verificamos que pertenezca al mes y año visualizado localmente
+                    if (localDate.getFullYear() === year && localDate.getMonth() === month) {
+                        const day = localDate.getDate();
+                        attendanceDays.add(day);
+                    }
                 });
             }
         } catch (e) {
@@ -313,19 +319,29 @@ async function loadModalCalendar(dni, year, month) {
 
     // Fetch attendance
     let attendanceData = {};
+    // CÓDIGO ACTUALIZADO PARA EL MODAL DE DETALLE:
     try {
         const attRes = await fetch(`${API_URL}/api/attendance/${dni}?month=${year}-${String(month + 1).padStart(2, '0')}`);
         if (attRes.ok) {
             const records = await attRes.json();
             records.forEach(r => {
-                const day = parseInt(r.fecha.split('-')[2], 10);
-                if (!attendanceData[day]) {
-                    attendanceData[day] = { hora_entrada: null, hora_salida: null };
-                }
-                if (r.tipo === 'Entrada') {
-                    attendanceData[day].hora_entrada = r.hora;
-                } else if (r.tipo === 'Salida') {
-                    attendanceData[day].hora_salida = r.hora;
+                const utcString = r.timestamp || `${r.fecha}T${r.hora || '00:00:00'}Z`;
+                const localDate = new Date(utcString);
+                
+                if (localDate.getFullYear() === year && localDate.getMonth() === month) {
+                    const day = localDate.getDate();
+                    if (!attendanceData[day]) {
+                        attendanceData[day] = { hora_entrada: null, hora_salida: null };
+                    }
+                    
+                    // Convertimos también las horas de entrada/salida a formato local
+                    const horaLocalStr = localDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    
+                    if (r.tipo === 'Entrada') {
+                        attendanceData[day].hora_entrada = horaLocalStr;
+                    } else if (r.tipo === 'Salida') {
+                        attendanceData[day].hora_salida = horaLocalStr;
+                    }
                 }
             });
         }
