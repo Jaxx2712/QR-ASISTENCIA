@@ -146,18 +146,12 @@ async function ensureUsersTable() {
 
 initDB();
 
+// NUEVO CÓDIGO UTC:
 function getLocalTime() {
     const now = new Date();
-    const tz = process.env.TIMEZONE || 'America/Caracas';
-    let options = {};
-    try {
-        Intl.DateTimeFormat(undefined, { timeZone: tz });
-        options = { timeZone: tz };
-    } catch (e) {
-        options = {};
-    }
-    const fecha = now.toLocaleDateString('en-CA', options); // YYYY-MM-DD
-    const hora = now.toLocaleTimeString('en-GB', options);   // HH:MM:SS
+    // Extrae la fecha y hora exacta en formato universal UTC
+    const fecha = now.toISOString().split('T')[0]; // YYYY-MM-DD (UTC)
+    const hora = now.toISOString().split('T')[1].split('.')[0]; // HH:MM:SS (UTC)
     return { fecha, hora };
 }
 
