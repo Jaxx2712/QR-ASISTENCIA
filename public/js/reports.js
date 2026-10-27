@@ -25,6 +25,17 @@ function escapeHtml(str) {
         .replace(/'/g, '&#039;');
 }
 
+// Función para convertir la hora UTC del servidor a la hora local del dispositivo
+function formatLocalTime(fechaStr, timeStr) {
+    if (!timeStr) return '';
+    try {
+        const utcDate = new Date(`${fechaStr}T${timeStr}Z`);
+        return utcDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    } catch (e) {
+        return timeStr;
+    }
+}
+
 // Clock
 function startClock() {
     const clockEl = document.getElementById('clock');
@@ -252,12 +263,17 @@ function renderDailyTable(data) {
     document.getElementById('statVal2').textContent = presentCount;
     document.getElementById('statVal3').textContent = exitedCount;
 
-    renderTableBody(records, rec => `
-        <td>${escapeHtml(rec.dni)}</td>
-        <td>${escapeHtml(rec.nombre)}</td>
-        <td>${escapeHtml(rec.hora_entrada_fmt || '')}</td>
-        <td>${escapeHtml(rec.hora_salida_fmt || '')}</td>
-    `);
+    // AQUÍ APLICAMOS LA CONVERSIÓN A HORA LOCAL:
+    renderTableBody(records, rec => {
+        const localEntrada = formatLocalTime(data.fecha, rec.hora_entrada);
+        const localSalida = formatLocalTime(data.fecha, rec.hora_salida);
+        return `
+            <td>${escapeHtml(rec.dni)}</td>
+            <td>${escapeHtml(rec.nombre)}</td>
+            <td>${escapeHtml(localEntrada)}</td>
+            <td>${escapeHtml(localSalida)}</td>
+        `;
+    });
 }
 
 // Render Weekly Table
