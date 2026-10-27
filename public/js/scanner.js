@@ -177,8 +177,17 @@ async function loadRecentActivity() {
             const safeName = escapeHtml(record.nombre || record.name);
             const safeDni = escapeHtml(record.worker_dni || record.id);
             const safeTipo = escapeHtml(record.tipo || record.type);
-            const safeHora = escapeHtml(record.hora || '');
-            const safeFecha = escapeHtml(record.fecha || '');
+            // Convierte la fecha y hora UTC del servidor a la hora local del teléfono
+            let safeHora = '';
+            let safeFecha = '';
+            if (record.fecha && record.hora) {
+                const utcDate = new Date(`${record.fecha}T${record.hora}Z`);
+                safeHora = utcDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                safeFecha = utcDate.toLocaleDateString('es-ES', { year: 'numeric', month: '2-digit', day: '2-digit' }).split('/').reverse().join('-');
+            } else {
+                safeHora = escapeHtml(record.hora || '');
+                safeFecha = escapeHtml(record.fecha || '');
+            }
             
             container.innerHTML += `
                 <div class="activity-item ${colorClass}">
