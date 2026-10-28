@@ -370,20 +370,26 @@ function renderTableBody(records, rowFormatter) {
 function downloadCurrentExcelReport() {
     const token = getAuthToken() || '';
     const tokenQuery = token ? `&token=${encodeURIComponent(token)}` : '';
+    
+    // 1. Esto detecta la zona horaria de tu teléfono (ej. "America/Santiago")
+    const userTz = encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+    
     let downloadUrl = '';
 
     if (currentSubSection === 'daily') {
         const dateInput = document.getElementById('reportDate');
         const fecha = (dateInput && dateInput.value) ? dateInput.value : getTodayString();
-        downloadUrl = `${API_URL}/api/reports/daily/download?fecha=${encodeURIComponent(fecha)}${tokenQuery}`;
+        
+        // 2. IMPORTANTE: Asegúrate de que lleve "&tz=" al final de la URL
+        downloadUrl = `${API_URL}/api/reports/daily/download?fecha=${encodeURIComponent(fecha)}&tz=${userTz}${tokenQuery}`;
     } else if (currentSubSection === 'weekly') {
         const weekInput = document.getElementById('reportWeekDate');
         const fecha = (weekInput && weekInput.value) ? weekInput.value : getTodayString();
-        downloadUrl = `${API_URL}/api/reports/weekly/download?fecha=${encodeURIComponent(fecha)}${tokenQuery}`;
+        downloadUrl = `${API_URL}/api/reports/weekly/download?fecha=${encodeURIComponent(fecha)}&tz=${userTz}${tokenQuery}`;
     } else if (currentSubSection === 'monthly') {
         const monthInput = document.getElementById('reportMonth');
         const mes = (monthInput && monthInput.value) ? monthInput.value : getCurrentMonthString();
-        downloadUrl = `${API_URL}/api/reports/monthly/download?mes=${encodeURIComponent(mes)}${tokenQuery}`;
+        downloadUrl = `${API_URL}/api/reports/monthly/download?mes=${encodeURIComponent(mes)}&tz=${userTz}${tokenQuery}`;
     }
 
     if (!downloadUrl) return;
