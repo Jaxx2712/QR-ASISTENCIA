@@ -155,6 +155,22 @@ function getLocalTime() {
     return { fecha, hora };
 }
 
+// Helper para convertir la hora UTC a la zona horaria del cliente en el Excel
+function formatUtcToLocal12h(fechaStr, horaStr, clientTimeZone = 'UTC') {
+    if (!horaStr || !fechaStr) return '';
+    try {
+        const utcDate = new Date(`${fechaStr}T${horaStr}Z`);
+        return utcDate.toLocaleTimeString('en-US', {
+            timeZone: clientTimeZone,
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+        });
+    } catch (e) {
+        return formatTime12h(horaStr);
+    }
+}
+
 function formatTime12h(timeStr) {
     if (!timeStr) return '';
     const parts = timeStr.split(':');
@@ -255,6 +271,7 @@ function verifyPassword(password, salt, originalHash) {
         return false;
     }
 }
+
 
 // Active session store: token -> user session
 const activeSessions = new Map();
@@ -826,9 +843,11 @@ app.get('/api/reports/daily', requireAdmin, async (req, res) => {
     }
 });
 
-// GET /api/reports/daily/download - Descarga Excel Diario
+// GET /api/reports/daily/download - Descarga Excel Diario con Hora Local
 app.get('/api/reports/daily/download', requireAdmin, async (req, res) => {
     let fecha = req.query.fecha;
+    const clientTz = req.query.tz || 'UTC'; // Captura la zona horaria enviada por el frontend
+    
     if (!fecha) {
         fecha = getLocalTime().fecha;
     }
@@ -854,11 +873,13 @@ app.get('/api/reports/daily/download', requireAdmin, async (req, res) => {
         });
 
         const dayNumber = parseInt(fecha.split('-')[2], 10);
+        
+        // Mapea las filas aplicando la conversión a la zona horaria local del usuario
         const rows = result.rows.map(row => [
             row.dni,
             row.nombre,
-            formatTime12h(row.hora_entrada) || '',
-            formatTime12h(row.hora_salida) || ''
+            formatUtcToLocal12h(fecha, row.hora_entrada, clientTz),
+            formatUtcToLocal12h(fecha, row.hora_salida, clientTz)
         ]);
 
         await buildExcelSheet({
