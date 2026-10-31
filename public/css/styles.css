@@ -183,7 +183,7 @@ body {
     min-height: 100vh;
     min-width: 0;
     max-width: 100%;
-    width: 100%;
+    width: calc(100% - var(--sidebar-width)); /* <--- SOLUCIÓN EXACTA */
     overflow-x: hidden;
     transition: var(--transition);
 }
