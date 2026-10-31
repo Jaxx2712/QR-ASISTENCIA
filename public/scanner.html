@@ -20,16 +20,24 @@
         
         @media (min-width: 992px) {
             .scanner-container {
-                flex-direction: row;
+                flex-direction: row !important;
             }
             .scanner-main {
-                flex: 2;
-                min-width: 0; /* Solución clave para evitar desbordamiento en flexbox */
+                flex: 2 !important;
+                min-width: 0 !important; /* Vital para que flexbox no desborde en PC */
             }
             .scanner-side {
-                flex: 1;
-                min-width: 0; /* Solución clave para evitar desbordamiento en flexbox */
+                flex: 1 !important;
+                min-width: 0 !important; /* Vital para que la actividad reciente no se salga de la pantalla */
             }
+        }
+
+        .content-wrapper {
+            padding: 24px !important;
+            max-width: 1300px !important; /* Centra y limita el ancho máximo en PC */
+            margin: 0 auto !important;
+            box-sizing: border-box !important;
+            width: 100% !important;
         }
         
         .scanner-card {
