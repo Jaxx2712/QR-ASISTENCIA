@@ -168,13 +168,19 @@
                 <!-- Subsecciones: Segmented Control Tabs -->
                 <div class="report-tabs-control">
                     <button type="button" class="report-tab-btn active" id="tabDailyBtn" onclick="switchReportSubSection('daily')">
-                        <i class="fa-solid fa-calendar-day"></i> Reportes Diarios
+                        <i class="fa-solid fa-calendar-day"></i>
+                        <span class="tab-text-full">Reportes Diarios</span>
+                        <span class="tab-text-short">Diarios</span>
                     </button>
                     <button type="button" class="report-tab-btn" id="tabWeeklyBtn" onclick="switchReportSubSection('weekly')">
-                        <i class="fa-solid fa-calendar-week"></i> Reportes Semanales
+                        <i class="fa-solid fa-calendar-week"></i>
+                        <span class="tab-text-full">Reportes Semanales</span>
+                        <span class="tab-text-short">Semanales</span>
                     </button>
                     <button type="button" class="report-tab-btn" id="tabMonthlyBtn" onclick="switchReportSubSection('monthly')">
-                        <i class="fa-solid fa-calendar-days"></i> Reportes Mensuales
+                        <i class="fa-solid fa-calendar-days"></i>
+                        <span class="tab-text-full">Reportes Mensuales</span>
+                        <span class="tab-text-short">Mensuales</span>
                     </button>
                 </div>
 
@@ -183,34 +189,40 @@
                     <div class="report-date-filter" id="filterContainerDaily">
                         <label for="reportDate"><i class="fa-regular fa-calendar" style="color: #f59e0b;"></i> Fecha:</label>
                         <input type="date" id="reportDate" class="report-date-input" onchange="loadCurrentReport()">
-                        <button type="button" class="report-quick-btn" onclick="setTodayDate()">
-                            <i class="fa-solid fa-calendar-check"></i> Hoy
-                        </button>
-                        <button type="button" class="report-quick-btn" onclick="loadCurrentReport()">
-                            <i class="fa-solid fa-rotate"></i> Actualizar
-                        </button>
+                        <div class="filter-quick-btns">
+                            <button type="button" class="report-quick-btn" onclick="setTodayDate()">
+                                <i class="fa-solid fa-calendar-check"></i> Hoy
+                            </button>
+                            <button type="button" class="report-quick-btn" onclick="loadCurrentReport()">
+                                <i class="fa-solid fa-rotate"></i> Actualizar
+                            </button>
+                        </div>
                     </div>
 
                     <div class="report-date-filter" id="filterContainerWeekly" style="display: none;">
                         <label for="reportWeekDate"><i class="fa-regular fa-calendar-week" style="color: #f59e0b;"></i> Semana de:</label>
                         <input type="date" id="reportWeekDate" class="report-date-input" onchange="loadCurrentReport()">
-                        <button type="button" class="report-quick-btn" onclick="setCurrentWeekDate()">
-                            <i class="fa-solid fa-calendar-check"></i> Esta Semana
-                        </button>
-                        <button type="button" class="report-quick-btn" onclick="loadCurrentReport()">
-                            <i class="fa-solid fa-rotate"></i> Actualizar
-                        </button>
+                        <div class="filter-quick-btns">
+                            <button type="button" class="report-quick-btn" onclick="setCurrentWeekDate()">
+                                <i class="fa-solid fa-calendar-check"></i> Esta Semana
+                            </button>
+                            <button type="button" class="report-quick-btn" onclick="loadCurrentReport()">
+                                <i class="fa-solid fa-rotate"></i> Actualizar
+                            </button>
+                        </div>
                     </div>
 
                     <div class="report-date-filter" id="filterContainerMonthly" style="display: none;">
                         <label for="reportMonth"><i class="fa-regular fa-calendar-days" style="color: #f59e0b;"></i> Mes:</label>
                         <input type="month" id="reportMonth" class="report-date-input" onchange="loadCurrentReport()">
-                        <button type="button" class="report-quick-btn" onclick="setCurrentMonth()">
-                            <i class="fa-solid fa-calendar-check"></i> Este Mes
-                        </button>
-                        <button type="button" class="report-quick-btn" onclick="loadCurrentReport()">
-                            <i class="fa-solid fa-rotate"></i> Actualizar
-                        </button>
+                        <div class="filter-quick-btns">
+                            <button type="button" class="report-quick-btn" onclick="setCurrentMonth()">
+                                <i class="fa-solid fa-calendar-check"></i> Este Mes
+                            </button>
+                            <button type="button" class="report-quick-btn" onclick="loadCurrentReport()">
+                                <i class="fa-solid fa-rotate"></i> Actualizar
+                            </button>
+                        </div>
                     </div>
 
                     <div class="report-actions">
@@ -262,13 +274,14 @@
                         <table class="excel-sheet-table" id="excelSheetTable">
                             <thead>
                                 <tr class="excel-title-row">
-                                    <th colspan="4" id="excelTableTitle" class="excel-title-cell">Cargando reporte...</th>
+                                    <th colspan="5" id="excelTableTitle" class="excel-title-cell">Cargando reporte...</th>
                                 </tr>
                                 <tr class="excel-header-row" id="excelHeaderRow">
                                     <th class="excel-header-cell">DNI</th>
                                     <th class="excel-header-cell">Nombre</th>
                                     <th class="excel-header-cell" id="thCol3">hora de entrada</th>
                                     <th class="excel-header-cell" id="thCol4">hora de salida</th>
+                                    <th class="excel-header-cell" id="thCol5">total horas</th>
                                 </tr>
                             </thead>
                             <tbody id="excelTableBody">

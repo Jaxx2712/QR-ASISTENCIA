@@ -133,13 +133,17 @@ function switchReportSubSection(section) {
     const bannerDesc = document.getElementById('reportBannerDesc');
     const thCol3 = document.getElementById('thCol3');
     const thCol4 = document.getElementById('thCol4');
+    const thCol5 = document.getElementById('thCol5');
+    const titleCell = document.getElementById('excelTableTitle');
     const btnExcel = document.getElementById('btnDownloadExcel');
 
     if (section === 'daily') {
         bannerTitle.innerHTML = '<i class="fa-solid fa-calendar-day" style="color: #f59e0b;"></i> Reportes Diarios';
-        bannerDesc.textContent = 'Registro de asistencia diaria: DNI, Nombre, Hora de entrada y Hora de salida.';
+        bannerDesc.textContent = 'Registro de asistencia diaria: DNI, Nombre, Hora de entrada, Hora de salida y Horas trabajadas.';
         thCol3.textContent = 'hora de entrada';
         thCol4.textContent = 'hora de salida';
+        if (thCol5) thCol5.style.display = '';
+        if (titleCell) titleCell.colSpan = 5;
         btnExcel.innerHTML = '<i class="fa-solid fa-file-excel"></i> Descargar Excel Diario';
         document.getElementById('statLabel1').textContent = 'Asistieron Hoy';
         document.getElementById('statLabel2').textContent = 'En Sitio (Presentes)';
@@ -149,6 +153,8 @@ function switchReportSubSection(section) {
         bannerDesc.textContent = 'Resumen semanal de asistencia: DNI, Nombre, Días asistidos y Días faltados.';
         thCol3.textContent = 'dias asistidos';
         thCol4.textContent = 'dias faltados';
+        if (thCol5) thCol5.style.display = 'none';
+        if (titleCell) titleCell.colSpan = 4;
         btnExcel.innerHTML = '<i class="fa-solid fa-file-excel"></i> Descargar Excel Semanal';
         document.getElementById('statLabel1').textContent = 'Total Trabajadores';
         document.getElementById('statLabel2').textContent = 'Promedio Días Asist.';
@@ -158,6 +164,8 @@ function switchReportSubSection(section) {
         bannerDesc.textContent = 'Balance mensual de asistencia: DNI, Nombre, Días asistidos y Días faltados.';
         thCol3.textContent = 'dias asistidos';
         thCol4.textContent = 'dias faltados';
+        if (thCol5) thCol5.style.display = 'none';
+        if (titleCell) titleCell.colSpan = 4;
         btnExcel.innerHTML = '<i class="fa-solid fa-file-excel"></i> Descargar Excel Mensual';
         document.getElementById('statLabel1').textContent = 'Total Trabajadores';
         document.getElementById('statLabel2').textContent = 'Promedio Días Asist.';
@@ -178,13 +186,33 @@ function loadCurrentReport(isSilent = false) {
     }
 }
 
+// Helper para calcular horas trabajadas en el frontend
+function calculateClientHoursWorked(fechaStr, entrada, salida) {
+    if (!entrada || !salida) return '-';
+    try {
+        const d1 = new Date(`${fechaStr}T${entrada}Z`);
+        const d2 = new Date(`${fechaStr}T${salida}Z`);
+        const diffMs = d2.getTime() - d1.getTime();
+        if (diffMs <= 0) return '0 hrs';
+        const totalMinutes = Math.round(diffMs / 60000);
+        const hrs = Math.floor(totalMinutes / 60);
+        const mins = totalMinutes % 60;
+        if (mins === 0) return `${hrs} ${hrs === 1 ? 'hora' : 'horas'}`;
+        if (hrs === 0) return `${mins} min`;
+        return `${hrs}h ${mins}m`;
+    } catch (e) {
+        return '-';
+    }
+}
+
 // Load daily report
 async function loadDailyReport(isSilent = false) {
     const dateInput = document.getElementById('reportDate');
     const selectedDate = (dateInput && dateInput.value) ? dateInput.value : getTodayString();
+    const userTz = encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
 
     try {
-        const res = await fetch(`${API_URL}/api/reports/daily?fecha=${encodeURIComponent(selectedDate)}`);
+        const res = await fetch(`${API_URL}/api/reports/daily?fecha=${encodeURIComponent(selectedDate)}&tz=${userTz}`);
         if (!res.ok) throw new Error('Error al consultar el reporte diario');
         const data = await res.json();
 
@@ -238,13 +266,20 @@ async function loadMonthlyReport(isSilent = false) {
     }
 }
 
-// Render Daily Table
+// Render Daily Table (con 5 columnas incluyendo horas trabajadas)
 function renderDailyTable(data) {
     const diaNumber = data.dia;
     const records = data.records || [];
     
     const titleText = data.titulo || `Dia ${diaNumber}`;
-    document.getElementById('excelTableTitle').textContent = titleText;
+    const titleCell = document.getElementById('excelTableTitle');
+    if (titleCell) {
+        titleCell.textContent = titleText;
+        titleCell.colSpan = 5;
+    }
+    const thCol5 = document.getElementById('thCol5');
+    if (thCol5) thCol5.style.display = '';
+
     document.getElementById('badgeDiaTitle').textContent = `Dia ${diaNumber}`;
 
     let totalAttended = records.length;
@@ -263,17 +298,19 @@ function renderDailyTable(data) {
     document.getElementById('statVal2').textContent = presentCount;
     document.getElementById('statVal3').textContent = exitedCount;
 
-    // AQUÍ APLICAMOS LA CONVERSIÓN A HORA LOCAL:
+    // APLICAMOS LA CONVERSIÓN A HORA LOCAL Y CÁLCULO DE HORAS TRABAJADAS:
     renderTableBody(records, rec => {
         const localEntrada = formatLocalTime(data.fecha, rec.hora_entrada);
         const localSalida = formatLocalTime(data.fecha, rec.hora_salida);
+        const horas = rec.total_horas || calculateClientHoursWorked(data.fecha, rec.hora_entrada, rec.hora_salida);
         return `
             <td>${escapeHtml(rec.dni)}</td>
             <td>${escapeHtml(rec.nombre)}</td>
-            <td>${escapeHtml(localEntrada)}</td>
-            <td>${escapeHtml(localSalida)}</td>
+            <td>${escapeHtml(localEntrada || '-')}</td>
+            <td>${escapeHtml(localSalida || '-')}</td>
+            <td><span class="badge-hours">${escapeHtml(horas)}</span></td>
         `;
-    });
+    }, 5);
 }
 
 // Render Weekly Table
@@ -281,7 +318,14 @@ function renderWeeklyTable(data) {
     const records = data.records || [];
     const titleText = data.titulo || 'Reporte Semanal';
     
-    document.getElementById('excelTableTitle').textContent = titleText;
+    const titleCell = document.getElementById('excelTableTitle');
+    if (titleCell) {
+        titleCell.textContent = titleText;
+        titleCell.colSpan = 4;
+    }
+    const thCol5 = document.getElementById('thCol5');
+    if (thCol5) thCol5.style.display = 'none';
+
     document.getElementById('badgeDiaTitle').textContent = `Semana (${data.startDate || ''} al ${data.endDate || ''})`;
 
     const totalWorkers = records.length;
@@ -304,7 +348,7 @@ function renderWeeklyTable(data) {
         <td>${escapeHtml(rec.nombre)}</td>
         <td>${escapeHtml(rec.dias_asistidos)}</td>
         <td>${escapeHtml(rec.dias_faltados)}</td>
-    `);
+    `, 4);
 }
 
 // Render Monthly Table
@@ -312,7 +356,14 @@ function renderMonthlyTable(data) {
     const records = data.records || [];
     const titleText = data.titulo || `Mes ${data.mes || ''}`;
     
-    document.getElementById('excelTableTitle').textContent = titleText;
+    const titleCell = document.getElementById('excelTableTitle');
+    if (titleCell) {
+        titleCell.textContent = titleText;
+        titleCell.colSpan = 4;
+    }
+    const thCol5 = document.getElementById('thCol5');
+    if (thCol5) thCol5.style.display = 'none';
+
     document.getElementById('badgeDiaTitle').textContent = `Mes (${data.mes || ''})`;
 
     const totalWorkers = records.length;
@@ -335,11 +386,11 @@ function renderMonthlyTable(data) {
         <td>${escapeHtml(rec.nombre)}</td>
         <td>${escapeHtml(rec.dias_asistidos)}</td>
         <td>${escapeHtml(rec.dias_faltados)}</td>
-    `);
+    `, 4);
 }
 
-// Common Table Body Renderer with 15 rows minimum formatting
-function renderTableBody(records, rowFormatter) {
+// Common Table Body Renderer with 13 rows minimum formatting and dynamic column count
+function renderTableBody(records, rowFormatter, colCount = 4) {
     const tbody = document.getElementById('excelTableBody');
     if (!tbody) return;
     tbody.innerHTML = '';
@@ -356,12 +407,11 @@ function renderTableBody(records, rowFormatter) {
     for (let i = 0; i < emptyRowsToAdd; i++) {
         const emptyTr = document.createElement('tr');
         emptyTr.className = 'excel-empty-row';
-        emptyTr.innerHTML = `
-            <td>&nbsp;</td>
-            <td>&nbsp;</td>
-            <td>&nbsp;</td>
-            <td>&nbsp;</td>
-        `;
+        let emptyCells = '';
+        for (let c = 0; c < colCount; c++) {
+            emptyCells += '<td>&nbsp;</td>';
+        }
+        emptyTr.innerHTML = emptyCells;
         tbody.appendChild(emptyTr);
     }
 }

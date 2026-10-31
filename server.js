@@ -100,7 +100,41 @@ async function initDB() {
             FOREIGN KEY(worker_dni) REFERENCES workers(dni)
         )`);
 
+        await db.execute(`CREATE TABLE IF NOT EXISTS sessions (
+            token TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            nombre TEXT NOT NULL,
+            dni TEXT NOT NULL,
+            email TEXT,
+            cargo TEXT NOT NULL,
+            foto TEXT DEFAULT '',
+            expires_at INTEGER NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
+
         await ensureUsersTable();
+
+        // Pre-cargar sesiones válidas desde la base de datos para persistencia total
+        try {
+            const validSessions = await db.execute({
+                sql: `SELECT * FROM sessions WHERE expires_at > ?`,
+                args: [Date.now()]
+            });
+            for (const row of validSessions.rows) {
+                activeSessions.set(row.token, {
+                    userId: row.user_id,
+                    nombre: row.nombre,
+                    dni: row.dni,
+                    email: row.email,
+                    cargo: row.cargo,
+                    foto: row.foto || '',
+                    expiresAt: row.expires_at
+                });
+            }
+            console.log(`Sesiones activas cargadas desde base de datos: ${validSessions.rows.length}`);
+        } catch (sErr) {
+            console.warn('Advertencia al cargar sesiones previas:', sErr.message);
+        }
 
         console.log('Connected to database and initialized tables.');
     } catch (err) {
@@ -120,8 +154,15 @@ async function ensureUsersTable() {
             password_hash TEXT NOT NULL,
             salt TEXT NOT NULL,
             cargo TEXT NOT NULL CHECK(cargo IN ('Administrador','Supervisor')),
+            foto TEXT DEFAULT '',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`);
+
+        try {
+            await db.execute(`ALTER TABLE users ADD COLUMN foto TEXT DEFAULT ''`);
+        } catch (e) {
+            // Ignorar si ya existe
+        }
 
         try {
             const userCount = await db.execute(`SELECT COUNT(*) as count FROM users`);
@@ -146,8 +187,10 @@ async function ensureUsersTable() {
 
 initDB();
 
-// NUEVO CÓDIGO UTC:
-function getLocalTime() {
+// =========================================================================
+// TIEMPO Y ZONAS HORARIAS (Hora Base UTC con Conversión Automática a Local)
+// =========================================================================
+function getUtcTime() {
     const now = new Date();
     // Extrae la fecha y hora exacta en formato universal UTC
     const fecha = now.toISOString().split('T')[0]; // YYYY-MM-DD (UTC)
@@ -155,19 +198,65 @@ function getLocalTime() {
     return { fecha, hora };
 }
 
-// Helper para convertir la hora UTC a la zona horaria del cliente en el Excel
+// Mantener getLocalTime como alias de getUtcTime para consistencia en la base UTC
+function getLocalTime() {
+    return getUtcTime();
+}
+
+// Obtener fecha del cliente según su zona horaria
+function getClientDate(clientTimeZone = 'UTC') {
+    try {
+        const now = new Date();
+        const formatter = new Intl.DateTimeFormat('en-CA', {
+            timeZone: clientTimeZone,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
+        return formatter.format(now);
+    } catch (e) {
+        return getUtcTime().fecha;
+    }
+}
+
+// Helper para convertir la hora UTC a la zona horaria del cliente (12h am/pm)
 function formatUtcToLocal12h(fechaStr, horaStr, clientTimeZone = 'UTC') {
     if (!horaStr || !fechaStr) return '';
     try {
         const utcDate = new Date(`${fechaStr}T${horaStr}Z`);
-        return utcDate.toLocaleTimeString('en-US', {
+        return utcDate.toLocaleTimeString('es-ES', {
             timeZone: clientTimeZone,
-            hour: 'numeric',
+            hour: '2-digit',
             minute: '2-digit',
             hour12: true
         });
     } catch (e) {
         return formatTime12h(horaStr);
+    }
+}
+
+// Cálculo del total de horas trabajadas en el día
+function calculateWorkedHours(fechaStr, horaEntrada, horaSalida) {
+    if (!horaEntrada || !horaSalida) return '-';
+    try {
+        const d1 = new Date(`${fechaStr}T${horaEntrada}Z`);
+        const d2 = new Date(`${fechaStr}T${horaSalida}Z`);
+        const diffMs = d2.getTime() - d1.getTime();
+        if (diffMs <= 0) return '0 hrs';
+        
+        const totalMinutes = Math.round(diffMs / 60000);
+        const hrs = Math.floor(totalMinutes / 60);
+        const mins = totalMinutes % 60;
+        
+        if (mins === 0) {
+            return `${hrs} ${hrs === 1 ? 'hora' : 'horas'}`;
+        }
+        if (hrs === 0) {
+            return `${mins} min`;
+        }
+        return `${hrs}h ${mins}m`;
+    } catch (e) {
+        return '-';
     }
 }
 
@@ -273,24 +362,35 @@ function verifyPassword(password, salt, originalHash) {
 }
 
 
-// Active session store: token -> user session
+// Active session store: token -> user session (en memoria + persistencia SQLite)
 const activeSessions = new Map();
 
 function createSession(user) {
     const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days validity
-    activeSessions.set(token, {
+    const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 días de persistencia garantizada
+    const sessionData = {
         userId: user.id,
         nombre: user.nombre,
         dni: user.dni,
         email: user.email,
         cargo: user.cargo,
+        foto: user.foto || '',
         expiresAt
+    };
+    activeSessions.set(token, sessionData);
+
+    // Guardar en la base de datos para que la sesión no se pierda al reiniciar el servidor o el dispositivo
+    db.execute({
+        sql: `INSERT OR REPLACE INTO sessions (token, user_id, nombre, dni, email, cargo, foto, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [token, user.id || 0, user.nombre, user.dni, user.email || '', user.cargo, user.foto || '', expiresAt]
+    }).catch(err => {
+        console.error('Error al persistir sesión en base de datos:', err.message);
     });
+
     return token;
 }
 
-function getSessionUser(req) {
+async function getSessionUser(req) {
     const authHeader = req.headers['authorization'];
     let token = null;
     if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -299,17 +399,51 @@ function getSessionUser(req) {
         token = req.query.token;
     }
     if (!token) return null;
+
+    // 1. Revisar memoria rápida
     const session = activeSessions.get(token);
-    if (!session) return null;
-    if (Date.now() > session.expiresAt) {
-        activeSessions.delete(token);
-        return null;
+    if (session) {
+        if (Date.now() > session.expiresAt) {
+            activeSessions.delete(token);
+            db.execute({ sql: `DELETE FROM sessions WHERE token = ?`, args: [token] }).catch(() => {});
+            return null;
+        }
+        return session;
     }
-    return session;
+
+    // 2. Si no está en memoria (ej. tras reinicio del servidor), recuperar de la base de datos
+    try {
+        const dbRes = await db.execute({
+            sql: `SELECT * FROM sessions WHERE token = ?`,
+            args: [token]
+        });
+        if (dbRes.rows.length > 0) {
+            const row = dbRes.rows[0];
+            if (Date.now() <= Number(row.expires_at)) {
+                const recoveredSession = {
+                    userId: row.user_id,
+                    nombre: row.nombre,
+                    dni: row.dni,
+                    email: row.email,
+                    cargo: row.cargo,
+                    foto: row.foto || '',
+                    expiresAt: Number(row.expires_at)
+                };
+                activeSessions.set(token, recoveredSession);
+                return recoveredSession;
+            } else {
+                db.execute({ sql: `DELETE FROM sessions WHERE token = ?`, args: [token] }).catch(() => {});
+            }
+        }
+    } catch (e) {
+        console.error('Error recuperando sesión persistente:', e.message);
+    }
+
+    return null;
 }
 
-function requireAuth(req, res, next) {
-    const user = getSessionUser(req);
+async function requireAuth(req, res, next) {
+    const user = await getSessionUser(req);
     if (!user) {
         return res.status(401).json({ success: false, message: 'No autorizado. Inicie sesión.' });
     }
@@ -317,8 +451,8 @@ function requireAuth(req, res, next) {
     next();
 }
 
-function requireAdmin(req, res, next) {
-    const user = getSessionUser(req);
+async function requireAdmin(req, res, next) {
+    const user = await getSessionUser(req);
     if (!user) {
         return res.status(401).json({ success: false, message: 'No autorizado. Inicie sesión.' });
     }
@@ -464,7 +598,8 @@ app.post('/api/auth/login', async (req, res) => {
             id: user.id,
             nombre: user.nombre,
             dni: user.dni,
-            cargo: user.cargo
+            cargo: user.cargo,
+            foto: user.foto || ''
         };
 
         const token = createSession(userObj);
@@ -481,8 +616,8 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // GET /api/auth/me - Verify current session
-app.get('/api/auth/me', (req, res) => {
-    const user = getSessionUser(req);
+app.get('/api/auth/me', async (req, res) => {
+    const user = await getSessionUser(req);
     if (!user) {
         return res.status(401).json({ success: false, message: 'Sesión no válida o expirada.' });
     }
@@ -492,19 +627,64 @@ app.get('/api/auth/me', (req, res) => {
             nombre: user.nombre,
             dni: user.dni,
             email: user.email,
-            cargo: user.cargo
+            cargo: user.cargo,
+            foto: user.foto || ''
         }
     });
 });
 
 // POST /api/auth/logout - Logout
-app.post('/api/auth/logout', (req, res) => {
+app.post('/api/auth/logout', async (req, res) => {
     const authHeader = req.headers['authorization'];
     if (authHeader && authHeader.startsWith('Bearer ')) {
         const token = authHeader.substring(7);
         activeSessions.delete(token);
+        db.execute({ sql: `DELETE FROM sessions WHERE token = ?`, args: [token] }).catch(() => {});
     }
     res.json({ success: true, message: 'Sesión finalizada correctamente.' });
+});
+
+// POST /api/auth/profile/photo - Actualizar foto de perfil del usuario logueado
+app.post('/api/auth/profile/photo', requireAuth, async (req, res) => {
+    const { foto } = req.body;
+    let cleanFoto = '';
+    if (foto && typeof foto === 'string' && foto.trim()) {
+        const trimmed = foto.trim();
+        if (/^data:image\/(png|jpeg|jpg|webp);base64,/.test(trimmed) && trimmed.length <= 4 * 1024 * 1024) {
+            cleanFoto = trimmed;
+        } else {
+            return res.status(400).json({ success: false, message: 'Formato de imagen inválido o excede el límite permitido.' });
+        }
+    }
+
+    try {
+        const userDni = req.user.dni;
+        await db.execute({
+            sql: `UPDATE users SET foto = ? WHERE dni = ?`,
+            args: [cleanFoto, userDni]
+        });
+        await db.execute({
+            sql: `UPDATE sessions SET foto = ? WHERE dni = ?`,
+            args: [cleanFoto, userDni]
+        });
+
+        // Actualizar en memoria activa
+        req.user.foto = cleanFoto;
+        for (const [t, s] of activeSessions) {
+            if (s.dni === userDni) {
+                s.foto = cleanFoto;
+            }
+        }
+
+        res.json({
+            success: true,
+            message: 'Foto de perfil actualizada exitosamente.',
+            foto: cleanFoto
+        });
+    } catch (err) {
+        console.error('Error al actualizar foto de perfil:', err);
+        res.status(500).json({ success: false, message: 'Error interno al actualizar foto de perfil.' });
+    }
 });
 
 // Routes
@@ -567,12 +747,12 @@ async function buildExcelSheet({ title, headers, rows, sheetName, res, filename 
         }
     }
 
-    ws.columns = [
-        { width: 16 },
-        { width: 28 },
-        { width: 20 },
-        { width: 20 }
-    ];
+    ws.columns = headers.map((h, i) => {
+        if (i === 0) return { width: 16 };
+        if (i === 1) return { width: 28 };
+        if (i === 4) return { width: 22 };
+        return { width: 20 };
+    });
 
     const buffer = await wb.xlsx.writeBuffer();
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -741,6 +921,7 @@ app.get('/api/attendance/:dni', requireAdmin, async (req, res) => {
 
 // GET /api/attendance - Get recent attendance (Admin or Supervisor)
 app.get('/api/attendance', requireAuth, async (req, res) => {
+    const clientTz = req.headers['x-timezone'] || req.query.tz || 'UTC';
     let limit = parseInt(req.query.limit, 10) || 50;
     if (limit < 1) limit = 1;
     if (limit > 200) limit = 200;
@@ -749,7 +930,11 @@ app.get('/api/attendance', requireAuth, async (req, res) => {
             sql: `SELECT a.*, w.nombre FROM attendance a JOIN workers w ON a.worker_dni = w.dni ORDER BY a.timestamp DESC LIMIT ?`,
             args: [limit]
         });
-        res.json(result.rows);
+        const rows = result.rows.map(row => ({
+            ...row,
+            hora_local: formatUtcToLocal12h(row.fecha, row.hora, clientTz)
+        }));
+        res.json(rows);
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }
@@ -796,9 +981,10 @@ app.get('/api/dashboard', requireAdmin, async (req, res) => {
 
 // GET /api/reports/daily - Reporte Diario
 app.get('/api/reports/daily', requireAdmin, async (req, res) => {
+    const clientTz = req.headers['x-timezone'] || req.query.tz || 'UTC';
     let fecha = req.query.fecha;
     if (!fecha) {
-        fecha = getLocalTime().fecha;
+        fecha = getClientDate(clientTz);
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
         return res.status(400).json({ success: false, message: 'Formato de fecha inválido (YYYY-MM-DD).' });
@@ -827,8 +1013,9 @@ app.get('/api/reports/daily', requireAdmin, async (req, res) => {
             nombre: row.nombre,
             hora_entrada: row.hora_entrada,
             hora_salida: row.hora_salida,
-            hora_entrada_fmt: formatTime12h(row.hora_entrada),
-            hora_salida_fmt: formatTime12h(row.hora_salida)
+            hora_entrada_fmt: formatUtcToLocal12h(fecha, row.hora_entrada, clientTz),
+            hora_salida_fmt: formatUtcToLocal12h(fecha, row.hora_salida, clientTz),
+            total_horas: calculateWorkedHours(fecha, row.hora_entrada, row.hora_salida)
         }));
 
         res.json({
@@ -843,13 +1030,13 @@ app.get('/api/reports/daily', requireAdmin, async (req, res) => {
     }
 });
 
-// GET /api/reports/daily/download - Descarga Excel Diario con Hora Local
+// GET /api/reports/daily/download - Descarga Excel Diario con Hora Local y Total de Horas Trabajadas
 app.get('/api/reports/daily/download', requireAdmin, async (req, res) => {
+    const clientTz = req.query.tz || req.headers['x-timezone'] || 'UTC'; // Captura la zona horaria enviada por el frontend
     let fecha = req.query.fecha;
-    const clientTz = req.query.tz || 'UTC'; // Captura la zona horaria enviada por el frontend
     
     if (!fecha) {
-        fecha = getLocalTime().fecha;
+        fecha = getClientDate(clientTz);
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
         return res.status(400).send('Formato de fecha inválido (YYYY-MM-DD).');
@@ -874,17 +1061,18 @@ app.get('/api/reports/daily/download', requireAdmin, async (req, res) => {
 
         const dayNumber = parseInt(fecha.split('-')[2], 10);
         
-        // Mapea las filas aplicando la conversión a la zona horaria local del usuario
+        // Mapea las filas aplicando la conversión a la zona horaria local del usuario y calculando las horas trabajadas
         const rows = result.rows.map(row => [
             row.dni,
             row.nombre,
             formatUtcToLocal12h(fecha, row.hora_entrada, clientTz),
-            formatUtcToLocal12h(fecha, row.hora_salida, clientTz)
+            formatUtcToLocal12h(fecha, row.hora_salida, clientTz),
+            calculateWorkedHours(fecha, row.hora_entrada, row.hora_salida)
         ]);
 
         await buildExcelSheet({
             title: `Dia ${dayNumber}`,
-            headers: ['DNI', 'Nombre', 'hora de entrada', 'hora de salida'],
+            headers: ['DNI', 'Nombre', 'hora de entrada', 'hora de salida', 'Horas Trabajadas'],
             rows,
             sheetName: `Dia ${dayNumber}`,
             res,
