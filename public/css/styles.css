@@ -2406,3 +2406,30 @@ body.dark-mode .auth-alert-minimal.success {
     transform: translateY(0);
     box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);
 }
+
+/* ==========================================================================
+    Correcciones responsivas para PC (Generar QR y Escáner)
+   ========================================================================== */
+@media (min-width: 992px) {
+    /* Optimización para el Escáner en PC */
+    .scanner-container {
+        display: flex;
+        flex-direction: row;
+        gap: 24px;
+    }
+    .scanner-main {
+        flex: 2;
+        min-width: 0; /* Evita que flexbox desborde en pantallas grandes */
+    }
+    .scanner-side {
+        flex: 1;
+        min-width: 0; /* Evita que el panel de actividad reciente se corte */
+    }
+
+    /* Optimización para Generar QR en PC */
+    .page-container {
+        max-width: 1100px !important;
+        margin: 0 auto !important;
+        padding: 28px !important;
+    }
+}
