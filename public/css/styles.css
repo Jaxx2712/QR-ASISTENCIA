@@ -183,9 +183,16 @@ body {
     min-height: 100vh;
     min-width: 0;
     max-width: 100%;
-    width: calc(100% - var(--sidebar-width)); /* <--- SOLUCIÓN EXACTA */
+    width: 100%; /* Esto mantiene el teléfono intacto como al principio */
     overflow-x: hidden;
     transition: var(--transition);
+}
+
+/* El ancho ajustado para el menú solo aplica en pantallas de PC (mayores a 992px) */
+@media (min-width: 993px) {
+    .main-content {
+        width: calc(100% - var(--sidebar-width));
+    }
 }
 
 .top-bar {
