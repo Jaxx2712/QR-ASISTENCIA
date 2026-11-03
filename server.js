@@ -770,8 +770,9 @@ app.post('/api/workers', requireAdmin, async (req, res) => {
     
     const cleanDni = String(dni).trim();
     const cleanNombre = String(nombre).trim();
-    const cleanCargo = String(cargo || '').replace(/<[^>]*>/g, '').trim().substring(0, 100);
-    const cleanEmpresa = String(empresa || '').replace(/<[^>]*>/g, '').trim().substring(0, 100);
+    // Limitar primero el tamaño de la cadena y luego limpiar los caracteres HTML
+    const cleanCargo = String(cargo || '').substring(0, 100).replace(/<[^>]*>/g, '').trim();
+    const cleanEmpresa = String(empresa || '').substring(0, 100).replace(/<[^>]*>/g, '').trim();
 
     // Strict validations
     if (!/^\d{8}$/.test(cleanDni)) {
