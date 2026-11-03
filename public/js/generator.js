@@ -265,12 +265,14 @@ async function downloadBadge() {
         document.body.appendChild(modal);
     }
 
+    const sanitizedName = escapeHtml(safeName);
+
     modal.innerHTML = `
         <div style="background:white; padding:20px; border-radius:12px; max-width:90%; max-height:85%; display:flex; flex-direction:column; align-items:center; box-sizing:border-box;">
             <p style="margin:0 0 12px 0; font-family:Inter,sans-serif; font-size:15px; color:#1e293b; font-weight:600; text-align:center;">¡Carnet Generado con Éxito!</p>
             <img src="${dataUrl}" style="max-width:100%; max-height:55vh; object-fit:contain; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:15px;" />
             <div style="display:flex; gap:10px; width:100%;">
-                <a href="${dataUrl}" download="Carnet_${safeName}.png" style="flex:1; text-align:center; background:#10b981; color:white; text-decoration:none; padding:12px; border-radius:6px; font-weight:600; font-family:Inter,sans-serif;">Descargar</a>
+                <a href="${dataUrl}" download="Carnet_${sanitizedName}.png" style="flex:1; text-align:center; background:#10b981; color:white; text-decoration:none; padding:12px; border-radius:6px; font-weight:600; font-family:Inter,sans-serif;">Descargar</a>
                 <button onclick="document.getElementById('imageModalDownload').style.display='none'" style="flex:1; background:#ef4444; color:white; border:none; padding:12px; border-radius:6px; font-weight:600; font-family:Inter,sans-serif; cursor:pointer;">Cerrar</button>
             </div>
         </div>
@@ -386,3 +388,12 @@ function closeSidebar() {
     toggleSidebar(false);
 }
 window.closeSidebar = closeSidebar;
+
+function escapeHtml(str) {
+    return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;');
+}
