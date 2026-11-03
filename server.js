@@ -1,3 +1,11 @@
+const rateLimit = require('express-rate-limit');
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    message: { success: false, message: 'Demasiados intentos fallidos. Intenta nuevamente en 15 minutos.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
 const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@libsql/client');
@@ -547,7 +555,7 @@ app.post('/api/auth/register', async (req, res) => {
 });
 
 // POST /api/auth/login - Login with DNI
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', loginLimiter, async (req, res) => {
     const ip = req.ip || req.connection.remoteAddress || 'unknown';
     if (!checkLoginRateLimit(ip)) {
         return res.status(429).json({ success: false, message: 'Demasiados intentos fallidos. Intenta nuevamente en 15 minutos.' });
