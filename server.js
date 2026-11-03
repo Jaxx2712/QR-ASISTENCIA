@@ -771,8 +771,17 @@ app.post('/api/workers', requireAdmin, async (req, res) => {
     const cleanDni = String(dni).trim();
     const cleanNombre = String(nombre).trim();
     // Limitar primero el tamaño de la cadena y luego limpiar los caracteres HTML
-    const cleanCargo = String(cargo || '').substring(0, 100).replace(/<[^>]*>/g, '').trim();
-    const cleanEmpresa = String(empresa || '').substring(0, 100).replace(/<[^>]*>/g, '').trim();
+    // Función para escapar caracteres HTML de forma segura
+    const escapeHtml = (str) => String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;');
+
+    // Aplicación en las variables
+    const cleanCargo = escapeHtml(cargo).substring(0, 100).trim();
+    const cleanEmpresa = escapeHtml(empresa).substring(0, 100).trim();
 
     // Strict validations
     if (!/^\d{8}$/.test(cleanDni)) {
