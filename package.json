@@ -27,6 +27,6 @@
     "express-rate-limit": "^8.7.3"
   },
   "devDependencies": {
-    "@capacitor/assets": "^3.0.5"
+    "@capacitor/assets": "^4.0.0"
   }
 }
