@@ -117,9 +117,38 @@ async function renderWorkers(workersToRender) {
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth();
-    
+
+    // 1. Obtener la asistencia de todos los trabajadores en paralelo
+    const attendancePromises = workersToRender.map(async (worker) => {
+        let attendanceDays = new Set();
+        try {
+            const attRes = await fetch(`${API_URL}/api/attendance/${worker.dni}?month=${year}-${String(month + 1).padStart(2, '0')}`);
+            if (attRes.ok) {
+                const attData = await attRes.json();
+                attData.forEach(record => {
+                    const utcString = record.timestamp || `${record.fecha}T${record.hora || '00:00:00'}Z`;
+                    const localDate = new Date(utcString);
+                    
+                    if (localDate.getFullYear() === year && localDate.getMonth() === month) {
+                        attendanceDays.add(localDate.getDate());
+                    }
+                });
+            }
+        } catch (e) {
+            console.error('Error fetching attendance for', worker.dni);
+        }
+        return { dni: worker.dni, attendanceDays };
+    });
+
+    const attendanceResults = await Promise.all(attendancePromises);
+
+    const attendanceMap = {};
+    attendanceResults.forEach(item => {
+        attendanceMap[item.dni] = item.attendanceDays;
+    });
+
+    // 2. Renderizar las tarjetas en la interfaz de forma fluida
     for (const worker of workersToRender) {
-        // Create card element
         const card = document.createElement('div');
         card.className = 'worker-card';
         
@@ -135,33 +164,11 @@ async function renderWorkers(workersToRender) {
             avatarHtml = `<div class="avatar" style="background-color: transparent; overflow: hidden;"><img src="${worker.foto}" style="width: 100%; height: 100%; object-fit: cover;"></div>`;
         }
         
-        // Fetch attendance for mini calendar
-        let attendanceDays = new Set();
-        // CÓDIGO ACTUALIZADO PARA MINI-CALENDARIOS:
-        try {
-            const attRes = await fetch(`${API_URL}/api/attendance/${worker.dni}?month=${year}-${String(month + 1).padStart(2, '0')}`);
-            if (attRes.ok) {
-                const attData = await attRes.json();
-                attData.forEach(record => {
-                    // Tomamos el timestamp UTC o construimos la fecha UTC exacta
-                    const utcString = record.timestamp || `${record.fecha}T${record.hora || '00:00:00'}Z`;
-                    const localDate = new Date(utcString);
-                    
-                    // Verificamos que pertenezca al mes y año visualizado localmente
-                    if (localDate.getFullYear() === year && localDate.getMonth() === month) {
-                        const day = localDate.getDate();
-                        attendanceDays.add(day);
-                    }
-                });
-            }
-        } catch (e) {
-            console.error('Error fetching attendance for', worker.dni);
-        }
-
+        const attendanceDays = attendanceMap[worker.dni] || new Set();
         const miniCalendarHtml = generateMiniCalendar(year, month, attendanceDays);
 
         card.innerHTML = `
-            <button class="btn-delete" onclick="deleteWorker('${safeDni}')" title="Eliminar trabajador">
+            <button class="btn-delete" onclick="deleteWorker(event, '${safeDni}')" title="Eliminar trabajador">
                 <i class="fa-solid fa-trash"></i>
             </button>
             <div class="card-header">
@@ -451,12 +458,14 @@ function getAvatarColor(name) {
 }
 
 // Delete worker
-async function deleteWorker(dni) {
-    // Prevent event propagation if click is inside card
-    if(event) event.stopPropagation();
-    
+async function deleteWorker(e, dni) {
+    // Evitar propagación de eventos de forma segura con el argumento 'e'
+    if (e) {
+        e.stopPropagation();
+    }
+
     if (!confirm('¿Estás seguro de eliminar este trabajador y todos sus registros?')) return;
-    
+
     try {
         const res = await fetch(`${API_URL}/api/workers/${dni}`, { method: 'DELETE' });
         if (res.ok) {

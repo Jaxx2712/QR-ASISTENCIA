@@ -121,10 +121,20 @@ async function recordAttendance(tipo) {
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrando...';
     
     try {
+        // Obtener la fecha y hora local exacta del dispositivo
+        const ahora = new Date();
+        const fechaLocal = ahora.toLocaleDateString('en-CA'); // Formato YYYY-MM-DD
+        const horaLocal = ahora.toTimeString().split(' ')[0];   // Formato HH:mm:ss
+
         const response = await fetch(`${API_URL}/api/attendance`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ worker_dni: activeWorkerData.dni, tipo })
+            body: JSON.stringify({ 
+                worker_dni: activeWorkerData.dni, 
+                tipo,
+                fecha: fechaLocal,
+                hora: horaLocal
+            })
         });
         
         const data = await response.json();

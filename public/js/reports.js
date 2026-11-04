@@ -187,16 +187,25 @@ function loadCurrentReport(isSilent = false) {
 }
 
 // Helper para calcular horas trabajadas en el frontend
+// Helper para calcular horas trabajadas en el frontend
 function calculateClientHoursWorked(fechaStr, entrada, salida) {
     if (!entrada || !salida) return '-';
     try {
-        const d1 = new Date(`${fechaStr}T${entrada}Z`);
-        const d2 = new Date(`${fechaStr}T${salida}Z`);
+        let d1 = new Date(`${fechaStr}T${entrada}Z`);
+        let d2 = new Date(`${fechaStr}T${salida}Z`);
+        
+        // Si la hora de salida es menor o igual a la de entrada, el turno pasa al día siguiente
+        if (d2 <= d1) {
+            d2.setDate(d2.getDate() + 1);
+        }
+
         const diffMs = d2.getTime() - d1.getTime();
         if (diffMs <= 0) return '0 hrs';
+        
         const totalMinutes = Math.round(diffMs / 60000);
         const hrs = Math.floor(totalMinutes / 60);
         const mins = totalMinutes % 60;
+        
         if (mins === 0) return `${hrs} ${hrs === 1 ? 'hora' : 'horas'}`;
         if (hrs === 0) return `${mins} min`;
         return `${hrs}h ${mins}m`;
