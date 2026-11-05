@@ -25,25 +25,16 @@ function escapeHtml(str) {
         .replace(/'/g, '&#039;');
 }
 
-// Función para convertir la hora UTC del servidor a la hora local del dispositivo
-// Función corregida para manejar fecha y hora combinadas
-// Función corregida para evitar desfases de zona horaria al mostrar la hora en reportes
 function formatLocalTime(fechaStr, horaStr) {
     if (!horaStr) return '';
+    // Asegurar formato ISO con 'Z' para conversión UTC -> Local automática
+    const cleanHora = horaStr.includes('Z') ? horaStr : `${horaStr}Z`;
+    const dateObj = new Date(`${fechaStr}T${cleanHora}`);
     
-    // Si la hora ya es un string simple en formato "HH:mm:ss" o "HH:mm", 
-    // la devolvemos directamente para evitar conversiones erróneas del navegador.
-    if (/^\d{2}:\d{2}(:\d{2})?$/.test(horaStr)) {
-        return horaStr;
-    }
-
-    // Si viene en formato ISO completo
-    const dateObj = new Date(horaStr.includes('T') ? horaStr : `${fechaStr}T${horaStr}`);
     if (!isNaN(dateObj.getTime())) {
         return dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
     }
-
-    return horaStr; // Fallback
+    return horaStr;
 }
 
 // Clock

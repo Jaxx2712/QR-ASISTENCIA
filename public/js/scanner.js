@@ -118,19 +118,6 @@ async function recordAttendance(tipo) {
     if (!activeWorkerData) return;
 
     try {
-        // Obtenemos la hora LOCAL exacta del dispositivo (evita el salto de 4 horas)
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const day = String(now.getDate()).padStart(2, '0');
-        const fechaLocal = `${year}-${month}-${day}`;
-
-        // Usamos getHours(), getMinutes() y getSeconds() locales
-        const hours = String(now.getHours()).padStart(2, '0');
-        const minutes = String(now.getMinutes()).padStart(2, '0');
-        const seconds = String(now.getSeconds()).padStart(2, '0');
-        const horaLocal = `${hours}:${minutes}:${seconds}`;
-
         const response = await fetch(`${API_URL}/api/attendance`, {
             method: 'POST',
             headers: { 
@@ -139,9 +126,7 @@ async function recordAttendance(tipo) {
             },
             body: JSON.stringify({ 
                 worker_dni: activeWorkerData.dni, 
-                tipo: tipo,
-                fecha: fechaLocal,  // Enviamos la fecha local correcta
-                hora: horaLocal     // Enviamos la hora local exacta (2:21 en vez de 6:21)
+                tipo: tipo 
             })
         });
 
@@ -149,18 +134,15 @@ async function recordAttendance(tipo) {
 
         if (response.ok) {
             showNotification(data.message || `¡Asistencia (${tipo.toUpperCase()}) registrada correctamente!`, 'success');
-            
-            const resultSection = document.getElementById('scanResult');
-            if (resultSection) resultSection.style.display = 'none';
+            document.getElementById('scanResult').style.display = 'none';
             activeWorkerData = null;
-            
-            if (typeof startScanner === 'function') startScanner();
-            if (typeof loadRecentActivity === 'function') loadRecentActivity();
+            startScanner();
+            loadRecentActivity();
         } else {
-            showNotification(data.message || data.error || 'Error al registrar asistencia', 'error');
+            showNotification(data.message || 'Error al registrar asistencia', 'error');
         }
     } catch (err) {
-        console.error('Error registrando asistencia:', err);
+        console.error('Error:', err);
         showNotification('Error de conexión con el servidor', 'error');
     }
 }
@@ -181,9 +163,20 @@ async function loadRecentActivity() {
             const safeDni = escapeHtml(record.worker_dni || record.id);
             const safeTipo = escapeHtml(record.tipo || record.type);
             
-            // Usar directamente la hora y fecha local guardadas sin parsearlas con new Date()
-            let safeHora = escapeHtml(record.hora || '--:--:--');
-            let safeFecha = escapeHtml(record.fecha || '--/--/----');
+            // Convertir UTC a hora local del navegador añadiendo 'Z'
+            let safeHora = '--:--:--';
+            let safeFecha = '--/--/----';
+            if (record.fecha && record.hora) {
+                const utcString = `${record.fecha}T${record.hora}Z`;
+                const localDate = new Date(utcString);
+                if (!isNaN(localDate.getTime())) {
+                    safeHora = escapeHtml(localDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+                    safeFecha = escapeHtml(localDate.toLocaleDateString('es-ES', { year: 'numeric', month: '2-digit', day: '2-digit' }).split('/').reverse().join('-'));
+                } else {
+                    safeHora = escapeHtml(record.hora);
+                    safeFecha = escapeHtml(record.fecha);
+                }
+            }
             
             container.innerHTML += `
                 <div class="activity-item ${colorClass}">

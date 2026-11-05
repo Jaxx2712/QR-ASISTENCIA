@@ -198,14 +198,10 @@ initDB();
 // =========================================================================
 // TIEMPO Y ZONAS HORARIAS (Hora Local con Respaldo del Servidor)
 // =========================================================================
-function getUtcTime(clientFecha = null, clientHora = null) {
+function getUtcTime() {
     const now = new Date();
-    const fallbackFecha = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    const fallbackHora = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-
-    const fecha = clientFecha || fallbackFecha;
-    const hora = clientHora || fallbackHora;
-    
+    const fecha = now.toISOString().split('T')[0]; // YYYY-MM-DD (UTC)
+    const hora = now.toISOString().split('T')[1].split('.')[0]; // HH:MM:SS (UTC)
     return { fecha, hora };
 }
 
@@ -882,43 +878,25 @@ app.post('/api/attendance', requireAuth, async (req, res) => {
     if (!worker_dni || !tipo || !['Entrada', 'Salida'].includes(tipo)) {
         return res.status(400).json({ success: false, message: 'Datos inválidos.' });
     }
-    if (!/^\d{8}$/.test(worker_dni)) {
-        return res.status(400).json({ success: false, message: 'DNI inválido.' });
-    }
 
     try {
         const workerResult = await db.execute({
             sql: `SELECT nombre FROM workers WHERE dni = ?`,
             args: [worker_dni]
         });
-
         if (workerResult.rows.length === 0) {
             return res.status(404).json({ success: false, message: 'Trabajador no encontrado.' });
         }
 
-        const worker = workerResult.rows[0];
-        
-        // Generar el timestamp exacto en UTC puro
-        const now = new Date();
-        const fecha = now.toISOString().split('T')[0]; // YYYY-MM-DD
-        const hora = now.toISOString().split('T')[1].split('.')[0]; // HH:MM:SS
+        // Obtener hora UTC universal exacta
+        const { fecha, hora } = getUtcTime();
 
         await db.execute({
             sql: `INSERT INTO attendance (worker_dni, tipo, fecha, hora) VALUES (?, ?, ?, ?)`,
             args: [worker_dni, tipo, fecha, hora]
         });
 
-        const clientTz = req.headers['x-timezone'] || 'UTC';
-        const horaFormateada = formatUtcToLocal12h(fecha, hora, clientTz);
-
-        res.json({ 
-            success: true, 
-            message: `¡Asistencia (${tipo}) registrada correctamente!`, 
-            nombre: worker.nombre, 
-            tipo, 
-            fecha, 
-            hora: horaFormateada 
-        });
+        res.json({ success: true, message: `¡Asistencia (${tipo}) registrada correctamente!`, nombre: workerResult.rows[0].nombre, tipo, fecha, hora });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }

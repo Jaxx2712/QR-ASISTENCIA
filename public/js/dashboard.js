@@ -333,23 +333,29 @@ function getUTCDateKey(dateInput) {
 }
 
 /**
- * Formatea un timestamp UTC a hora local legible (HH:mm:ss) para mostrar en modales/tablas
+ * Formatea un timestamp UTC combinando fecha y hora a hora local legible (HH:mm:ss)
  */
-function formatUTCToLocalTime(utcTimestamp) {
-    if (!utcTimestamp) return '--:--';
-    const d = new Date(utcTimestamp);
-    if (isNaN(d.getTime())) return utcTimestamp;
+function formatUTCToLocalTime(fechaStr, horaStr) {
+    if (!horaStr) return '';
+    
+    // Asegurar formato ISO con 'Z' para conversión UTC -> Local automática
+    const cleanHora = horaStr.includes('Z') ? horaStr : `${horaStr}Z`;
+    const dateObj = new Date(`${fechaStr}T${cleanHora}`);
+    
+    if (!isNaN(dateObj.getTime())) {
+        return dateObj.toLocaleTimeString([], { 
+            hour: '2-digit', 
+            minute: '2-digit', 
+            second: '2-digit', 
+            hour12: false 
+        });
+    }
 
-    return d.toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-    });
+    return horaStr;
 }
 
 /**
- * Carga y construye el calendario de asistencias en UTC
+ * Carga y construye el calendario de asistencias en formato de cuadrícula exacta
  */
 async function loadModalCalendar(workerDni, year, month) {
     let records = [];
@@ -362,33 +368,51 @@ async function loadModalCalendar(workerDni, year, month) {
         console.error('Error fetching modal attendance:', e);
     }
 
-    // 1. Crear mapa de asistencias indexado estrictamente por la fecha 'YYYY-MM-DD'
+    // Actualizar el título del mes en el modal dinámicamente
+    const monthNames = [
+        'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
+        'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+    ];
+    const titleEl = document.getElementById('modalMonthName');
+    if (titleEl) {
+        titleEl.textContent = `${monthNames[month]} ${year}`;
+    }
+
+    // 1. Agrupar registros por fecha 'YYYY-MM-DD' separando Entrada y Salida
     const attendanceMap = {};
     records.forEach(r => {
         if (r.fecha) {
-            attendanceMap[r.fecha] = r;
+            if (!attendanceMap[r.fecha]) {
+                attendanceMap[r.fecha] = { entrada: null, salida: null };
+            }
+            if (r.tipo === 'Entrada' || r.tipo === 'entrada') {
+                attendanceMap[r.fecha].entrada = r.hora;
+            } else if (r.tipo === 'Salida' || r.tipo === 'salida') {
+                attendanceMap[r.fecha].salida = r.hora;
+            }
         }
     });
 
-    // 2. Obtener estructura del mes seleccionado
-    const container = document.getElementById('modalCalendarContainer');
+    // 2. Obtener el contenedor del calendario grande en el modal
+    const container = document.getElementById('modalCalendarGrid');
     if (!container) return;
 
     container.innerHTML = ''; // Limpiar contenedor
 
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const firstDay = new Date(year, month, 1).getDay(); // 0 is Sunday
+    const firstDay = new Date(year, month, 1).getDay(); // 0 es Domingo
     let startDay = firstDay === 0 ? 6 : firstDay - 1; // Lunes como primer día
-
-    const grid = document.createElement('div');
-    grid.className = 'calendar-grid';
 
     // Relleno inicial para días vacíos antes del primer día del mes
     for (let i = 0; i < startDay; i++) {
         const emptyCell = document.createElement('div');
         emptyCell.className = 'calendar-day empty';
-        grid.appendChild(emptyCell);
+        emptyCell.style.cssText = 'background: transparent; border: none; min-height: 75px;';
+        container.appendChild(emptyCell);
     }
+
+    let diasAsistidosCount = 0;
+    let diasLaborablesCount = 0;
 
     // Renderizar cada día del mes
     for (let day = 1; day <= daysInMonth; day++) {
@@ -396,32 +420,75 @@ async function loadModalCalendar(workerDni, year, month) {
         const monthStr = String(month + 1).padStart(2, '0');
         const cellDateKey = `${year}-${monthStr}-${dayStr}`;
 
-        const record = attendanceMap[cellDateKey];
+        const dayRecord = attendanceMap[cellDateKey];
         const dayCell = document.createElement('div');
         dayCell.className = 'calendar-day';
 
-        let statusClass = 'absent'; // Estado por defecto
-        let timeLabel = '';
-
-        if (record) {
-            statusClass = (record.tipo === 'Entrada' || record.tipo === 'entrada') ? 'present' : 'marked';
-            timeLabel = record.hora || '';
+        // Calcular día de la semana (0=Lun a 6=Dom)
+        const currentDow = (startDay + day - 1) % 7;
+        const isWeekend = (currentDow === 5 || currentDow === 6);
+        
+        if (!isWeekend) {
+            diasLaborablesCount++;
         }
 
-        dayCell.classList.add(statusClass);
-        dayCell.innerHTML = `
-            <span class="day-number">${day}</span>
-            ${record ? `<span class="day-time">${timeLabel}</span>` : ''}
+        let entradaHtml = '';
+        let salidaHtml = '';
+
+        dayCell.style.cssText = `
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            padding: 4px;
+            min-height: 75px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            background: #ffffff;
+            box-sizing: border-box;
+            overflow: hidden;
         `;
 
-        if (record) {
-            dayCell.title = `Fecha: ${cellDateKey}\nTipo: ${record.tipo}\nHora: ${timeLabel}`;
+        if (dayRecord && (dayRecord.entrada || dayRecord.salida)) {
+            diasAsistidosCount++;
+
+            if (dayRecord.entrada) {
+                // Pasamos tanto la fecha de la celda como la hora para que la convierta a local perfectamente
+                const localEntrada = formatUTCToLocalTime(cellDateKey, dayRecord.entrada);
+                entradaHtml = `<div style="font-size: 8px; color: #065f46; background: #dcfce7; border: 1px solid #bbf7d0; padding: 1px 3px; border-radius: 3px; margin-top: 2px; width: 100%; text-align: center; box-sizing: border-box; font-weight: 600;">Ent: ${localEntrada}</div>`;
+            }
+            if (dayRecord.salida) {
+                const localSalida = formatUTCToLocalTime(cellDateKey, dayRecord.salida);
+                salidaHtml = `<div style="font-size: 8px; color: #991b1b; background: #fee2e2; border: 1px solid #fecaca; padding: 1px 3px; border-radius: 3px; margin-top: 2px; width: 100%; text-align: center; box-sizing: border-box; font-weight: 600;">Sal: ${localSalida}</div>`;
+            }
+        } else {
+            if (isWeekend) {
+                dayCell.style.background = '#f8fafc';
+            }
         }
 
-        grid.appendChild(dayCell);
+        dayCell.innerHTML = `
+            <div style="font-weight: 700; font-size: 11px; color: #1e293b; margin-bottom: 2px; width: 100%; text-align: left; padding-left: 2px;">${day}</div>
+            <div style="display: flex; flex-direction: column; gap: 1px; width: 100%;">
+                ${entradaHtml}
+                ${salidaHtml}
+            </div>
+        `;
+
+        container.appendChild(dayCell);
     }
 
-    container.appendChild(grid);
+    // Actualizar contadores del resumen en el modal
+    const summaryAttended = document.getElementById('summaryAttended');
+    const summaryTotal = document.getElementById('summaryTotal');
+    const summaryPercentage = document.getElementById('summaryPercentage');
+
+    if (summaryAttended) summaryAttended.textContent = diasAsistidosCount;
+    if (summaryTotal) summaryTotal.textContent = diasLaborablesCount;
+    if (summaryPercentage && diasLaborablesCount > 0) {
+        const pct = Math.round((diasAsistidosCount / diasLaborablesCount) * 100);
+        summaryPercentage.textContent = `${pct}%`;
+    }
 }
 
 // Avatar color generator
