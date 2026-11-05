@@ -113,62 +113,55 @@ function onScanSuccess(decodedText) {
     }
 }
 
+// Sustituye la función recordAttendance por esta versión:
 async function recordAttendance(tipo) {
     if (!activeWorkerData) return;
-    
-    const btn = event.target.closest('button');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrando...';
-    
+
     try {
-        // Obtener la fecha y hora local exacta del dispositivo
-        const ahora = new Date();
-        const fechaLocal = ahora.toLocaleDateString('en-CA'); // Formato YYYY-MM-DD
-        const horaLocal = ahora.toTimeString().split(' ')[0];   // Formato HH:mm:ss
+        // Obtenemos la hora LOCAL exacta del dispositivo (evita el salto de 4 horas)
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const fechaLocal = `${year}-${month}-${day}`;
+
+        // Usamos getHours(), getMinutes() y getSeconds() locales
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
+        const horaLocal = `${hours}:${minutes}:${seconds}`;
 
         const response = await fetch(`${API_URL}/api/attendance`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${getAuthToken()}`
+            },
             body: JSON.stringify({ 
                 worker_dni: activeWorkerData.dni, 
-                tipo,
-                fecha: fechaLocal,
-                hora: horaLocal
+                tipo: tipo,
+                fecha: fechaLocal,  // Enviamos la fecha local correcta
+                hora: horaLocal     // Enviamos la hora local exacta (2:21 en vez de 6:21)
             })
         });
-        
+
         const data = await response.json();
-        
-        if (!response.ok) {
-            showNotification(data.error, 'error');
-            return;
+
+        if (response.ok) {
+            showNotification(data.message || `¡Asistencia (${tipo.toUpperCase()}) registrada correctamente!`, 'success');
+            
+            const resultSection = document.getElementById('scanResult');
+            if (resultSection) resultSection.style.display = 'none';
+            activeWorkerData = null;
+            
+            if (typeof startScanner === 'function') startScanner();
+            if (typeof loadRecentActivity === 'function') loadRecentActivity();
+        } else {
+            showNotification(data.message || data.error || 'Error al registrar asistencia', 'error');
         }
-        
-        // Show success
-        showNotification(
-            `${tipo} registrada para ${data.nombre} a las ${data.hora}`, 
-            'success'
-        );
-        
-        // Reset
-        document.getElementById('scanResult').style.display = 'none';
-        activeWorkerData = null;
-        
-        // Reload activity
-        loadRecentActivity();
-        
-        // Restart scanner after a moment
-        setTimeout(() => startScanner(), 1500);
-        
-    } catch (error) {
-        showNotification('Error de conexión con el servidor.', 'error');
-    } finally {
-        // Re-enable buttons
-        document.querySelectorAll('.attendance-btn').forEach(b => {
-            b.disabled = false;
-        });
-        document.querySelector('.btn-entrada').innerHTML = '<i class="fas fa-sign-in-alt"></i> ENTRADA';
-        document.querySelector('.btn-salida').innerHTML = '<i class="fas fa-sign-out-alt"></i> SALIDA';
+    } catch (err) {
+        console.error('Error registrando asistencia:', err);
+        showNotification('Error de conexión con el servidor', 'error');
     }
 }
 
@@ -187,17 +180,10 @@ async function loadRecentActivity() {
             const safeName = escapeHtml(record.nombre || record.name);
             const safeDni = escapeHtml(record.worker_dni || record.id);
             const safeTipo = escapeHtml(record.tipo || record.type);
-            // Convierte la fecha y hora UTC del servidor a la hora local del teléfono
-            let safeHora = '';
-            let safeFecha = '';
-            if (record.fecha && record.hora) {
-                const utcDate = new Date(`${record.fecha}T${record.hora}Z`);
-                safeHora = utcDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                safeFecha = utcDate.toLocaleDateString('es-ES', { year: 'numeric', month: '2-digit', day: '2-digit' }).split('/').reverse().join('-');
-            } else {
-                safeHora = escapeHtml(record.hora || '');
-                safeFecha = escapeHtml(record.fecha || '');
-            }
+            
+            // Usar directamente la hora y fecha local guardadas sin parsearlas con new Date()
+            let safeHora = escapeHtml(record.hora || '--:--:--');
+            let safeFecha = escapeHtml(record.fecha || '--/--/----');
             
             container.innerHTML += `
                 <div class="activity-item ${colorClass}">

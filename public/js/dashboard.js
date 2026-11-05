@@ -126,11 +126,12 @@ async function renderWorkers(workersToRender) {
             if (attRes.ok) {
                 const attData = await attRes.json();
                 attData.forEach(record => {
-                    const utcString = record.timestamp || `${record.fecha}T${record.hora || '00:00:00'}Z`;
-                    const localDate = new Date(utcString);
-                    
-                    if (localDate.getFullYear() === year && localDate.getMonth() === month) {
-                        attendanceDays.add(localDate.getDate());
+                    // Usar directamente record.fecha ('YYYY-MM-DD') para evitar desfases de zona horaria al pintar el calendario
+                    if (record.fecha) {
+                        const [recYear, recMonth, recDay] = record.fecha.split('-').map(Number);
+                        if (recYear === year && (recMonth - 1) === month) {
+                            attendanceDays.add(recDay);
+                        }
                     }
                 });
             }
@@ -316,137 +317,111 @@ async function nextMonth() {
     await loadModalCalendar(currentModalWorkerDni, currentModalYear, currentModalMonth);
 }
 
-async function loadModalCalendar(dni, year, month) {
-    // Update month name header
-    const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-    document.getElementById('modalMonthName').textContent = `${monthNames[month]} ${year}`;
+/**
+ * Convierte cualquier fecha/timestamp UTC a una clave de fecha global "YYYY-MM-DD"
+ */
+function getUTCDateKey(dateInput) {
+    if (!dateInput) return null;
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return null;
 
-    const grid = document.getElementById('modalCalendarGrid');
-    grid.innerHTML = '';
+    const year = d.getUTCFullYear();
+    const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
 
-    // Fetch attendance
-    let attendanceData = {};
-    // CÓDIGO ACTUALIZADO PARA EL MODAL DE DETALLE:
+    return `${year}-${month}-${day}`;
+}
+
+/**
+ * Formatea un timestamp UTC a hora local legible (HH:mm:ss) para mostrar en modales/tablas
+ */
+function formatUTCToLocalTime(utcTimestamp) {
+    if (!utcTimestamp) return '--:--';
+    const d = new Date(utcTimestamp);
+    if (isNaN(d.getTime())) return utcTimestamp;
+
+    return d.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
+}
+
+/**
+ * Carga y construye el calendario de asistencias en UTC
+ */
+async function loadModalCalendar(workerDni, year, month) {
+    let records = [];
     try {
-        const attRes = await fetch(`${API_URL}/api/attendance/${dni}?month=${year}-${String(month + 1).padStart(2, '0')}`);
-        if (attRes.ok) {
-            const records = await attRes.json();
-            records.forEach(r => {
-                const utcString = r.timestamp || `${r.fecha}T${r.hora || '00:00:00'}Z`;
-                const localDate = new Date(utcString);
-                
-                if (localDate.getFullYear() === year && localDate.getMonth() === month) {
-                    const day = localDate.getDate();
-                    if (!attendanceData[day]) {
-                        attendanceData[day] = { hora_entrada: null, hora_salida: null };
-                    }
-                    
-                    // Convertimos también las horas de entrada/salida a formato local
-                    const horaLocalStr = localDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                    
-                    if (r.tipo === 'Entrada') {
-                        attendanceData[day].hora_entrada = horaLocalStr;
-                    } else if (r.tipo === 'Salida') {
-                        attendanceData[day].hora_salida = horaLocalStr;
-                    }
-                }
-            });
+        const res = await fetch(`${API_URL}/api/attendance/${workerDni}?month=${year}-${String(month + 1).padStart(2, '0')}`);
+        if (res.ok) {
+            records = await res.json();
         }
     } catch (e) {
-        console.error('Error fetching details for modal:', e);
+        console.error('Error fetching modal attendance:', e);
     }
+
+    // 1. Crear mapa de asistencias indexado estrictamente por la fecha 'YYYY-MM-DD'
+    const attendanceMap = {};
+    records.forEach(r => {
+        if (r.fecha) {
+            attendanceMap[r.fecha] = r;
+        }
+    });
+
+    // 2. Obtener estructura del mes seleccionado
+    const container = document.getElementById('modalCalendarContainer');
+    if (!container) return;
+
+    container.innerHTML = ''; // Limpiar contenedor
 
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const firstDay = new Date(year, month, 1).getDay();
-    let startDay = firstDay === 0 ? 6 : firstDay - 1;
-    
-    const now = new Date();
-    const today = now.getDate();
-    const isCurrentMonth = now.getFullYear() === year && now.getMonth() === month;
+    const firstDay = new Date(year, month, 1).getDay(); // 0 is Sunday
+    let startDay = firstDay === 0 ? 6 : firstDay - 1; // Lunes como primer día
 
-    let attendedDaysCount = 0;
-    let workDaysCount = 0;
+    const grid = document.createElement('div');
+    grid.className = 'calendar-grid';
 
-    // Empty cells before start
+    // Relleno inicial para días vacíos antes del primer día del mes
     for (let i = 0; i < startDay; i++) {
-        const cell = document.createElement('div');
-        cell.className = 'lc-cell empty';
-        grid.appendChild(cell);
+        const emptyCell = document.createElement('div');
+        emptyCell.className = 'calendar-day empty';
+        grid.appendChild(emptyCell);
     }
 
+    // Renderizar cada día del mes
     for (let day = 1; day <= daysInMonth; day++) {
-        let dow = (startDay + day - 1) % 7;
-        let isWeekend = (dow === 5 || dow === 6);
-        
-        const cell = document.createElement('div');
-        let classes = ['lc-cell'];
-        let contentHtml = `<div class="lc-date">${day}</div>`;
+        const dayStr = String(day).padStart(2, '0');
+        const monthStr = String(month + 1).padStart(2, '0');
+        const cellDateKey = `${year}-${monthStr}-${dayStr}`;
 
-        if (attendanceData[day]) {
-            classes.push('attended');
-            attendedDaysCount++;
-            if(!isWeekend) workDaysCount++;
-            
-            contentHtml += `<div class="lc-times">`;
-            if (attendanceData[day].hora_entrada) {
-                contentHtml += `<span class="lc-time-in">Ent: ${attendanceData[day].hora_entrada}</span>`;
-            }
-            if (attendanceData[day].hora_salida) {
-                contentHtml += `<span class="lc-time-out">Sal: ${attendanceData[day].hora_salida}</span>`;
-            }
-            contentHtml += `</div>`;
-        } else {
-            if (isCurrentMonth) {
-                if (day > today) {
-                    classes.push('future');
-                } else {
-                    classes.push('absent');
-                    if(!isWeekend) workDaysCount++;
-                }
-            } else if (new Date(year, month, day) > now) {
-                classes.push('future');
-            } else {
-                classes.push('absent');
-                if(!isWeekend) workDaysCount++;
-            }
+        const record = attendanceMap[cellDateKey];
+        const dayCell = document.createElement('div');
+        dayCell.className = 'calendar-day';
+
+        let statusClass = 'absent'; // Estado por defecto
+        let timeLabel = '';
+
+        if (record) {
+            statusClass = (record.tipo === 'Entrada' || record.tipo === 'entrada') ? 'present' : 'marked';
+            timeLabel = record.hora || '';
         }
 
-        cell.className = classes.join(' ');
-        cell.innerHTML = contentHtml;
-        grid.appendChild(cell);
-    }
+        dayCell.classList.add(statusClass);
+        dayCell.innerHTML = `
+            <span class="day-number">${day}</span>
+            ${record ? `<span class="day-time">${timeLabel}</span>` : ''}
+        `;
 
-    // Fill remaining cells
-    const totalCells = startDay + daysInMonth;
-    const remainingCells = (7 - (totalCells % 7)) % 7;
-    for (let i = 0; i < remainingCells; i++) {
-        const cell = document.createElement('div');
-        cell.className = 'lc-cell empty';
-        grid.appendChild(cell);
-    }
-
-    // Update stats
-    // Let's count total laborable days as weekdays up to today for current month, or all weekdays for past months
-    let totalLaborable = 0;
-    for (let day = 1; day <= daysInMonth; day++) {
-        let dow = (startDay + day - 1) % 7;
-        if (dow !== 5 && dow !== 6) { // Not weekend
-            if (isCurrentMonth) {
-                if (day <= today) totalLaborable++;
-            } else if (new Date(year, month, day) < now) {
-                totalLaborable++;
-            }
+        if (record) {
+            dayCell.title = `Fecha: ${cellDateKey}\nTipo: ${record.tipo}\nHora: ${timeLabel}`;
         }
+
+        grid.appendChild(dayCell);
     }
 
-    document.getElementById('summaryAttended').textContent = attendedDaysCount;
-    document.getElementById('summaryTotal').textContent = totalLaborable;
-    
-    let percentage = totalLaborable > 0 ? Math.round((attendedDaysCount / totalLaborable) * 100) : 0;
-    // Cap at 100 if they attended weekends
-    if (percentage > 100) percentage = 100;
-    
-    document.getElementById('summaryPercentage').textContent = `${percentage}%`;
+    container.appendChild(grid);
 }
 
 // Avatar color generator

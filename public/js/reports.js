@@ -26,14 +26,24 @@ function escapeHtml(str) {
 }
 
 // Función para convertir la hora UTC del servidor a la hora local del dispositivo
-function formatLocalTime(fechaStr, timeStr) {
-    if (!timeStr) return '';
-    try {
-        const utcDate = new Date(`${fechaStr}T${timeStr}Z`);
-        return utcDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    } catch (e) {
-        return timeStr;
+// Función corregida para manejar fecha y hora combinadas
+// Función corregida para evitar desfases de zona horaria al mostrar la hora en reportes
+function formatLocalTime(fechaStr, horaStr) {
+    if (!horaStr) return '';
+    
+    // Si la hora ya es un string simple en formato "HH:mm:ss" o "HH:mm", 
+    // la devolvemos directamente para evitar conversiones erróneas del navegador.
+    if (/^\d{2}:\d{2}(:\d{2})?$/.test(horaStr)) {
+        return horaStr;
     }
+
+    // Si viene en formato ISO completo
+    const dateObj = new Date(horaStr.includes('T') ? horaStr : `${fechaStr}T${horaStr}`);
+    if (!isNaN(dateObj.getTime())) {
+        return dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    }
+
+    return horaStr; // Fallback
 }
 
 // Clock
@@ -187,12 +197,11 @@ function loadCurrentReport(isSilent = false) {
 }
 
 // Helper para calcular horas trabajadas en el frontend
-// Helper para calcular horas trabajadas en el frontend
 function calculateClientHoursWorked(fechaStr, entrada, salida) {
     if (!entrada || !salida) return '-';
     try {
-        let d1 = new Date(`${fechaStr}T${entrada}Z`);
-        let d2 = new Date(`${fechaStr}T${salida}Z`);
+        let d1 = new Date(`${fechaStr}T${entrada}`);
+        let d2 = new Date(`${fechaStr}T${salida}`);     
         
         // Si la hora de salida es menor o igual a la de entrada, el turno pasa al día siguiente
         if (d2 <= d1) {

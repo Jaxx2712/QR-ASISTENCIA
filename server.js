@@ -196,17 +196,20 @@ async function ensureUsersTable() {
 initDB();
 
 // =========================================================================
-// TIEMPO Y ZONAS HORARIAS (Hora Base UTC con Conversión Automática a Local)
+// TIEMPO Y ZONAS HORARIAS (Hora Local con Respaldo del Servidor)
 // =========================================================================
-function getUtcTime() {
+function getUtcTime(clientFecha = null, clientHora = null) {
     const now = new Date();
-    // Extrae la fecha y hora exacta en formato universal UTC
-    const fecha = now.toISOString().split('T')[0]; // YYYY-MM-DD (UTC)
-    const hora = now.toISOString().split('T')[1].split('.')[0]; // HH:MM:SS (UTC)
+    const fallbackFecha = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const fallbackHora = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
+    const fecha = clientFecha || fallbackFecha;
+    const hora = clientHora || fallbackHora;
+    
     return { fecha, hora };
 }
 
-// Mantener getLocalTime como alias de getUtcTime para consistencia en la base UTC
+// Mantener getLocalTime como alias
 function getLocalTime() {
     return getUtcTime();
 }
@@ -231,9 +234,12 @@ function getClientDate(clientTimeZone = 'UTC') {
 function formatUtcToLocal12h(fechaStr, horaStr, clientTimeZone = 'UTC') {
     if (!horaStr || !fechaStr) return '';
     try {
-        const utcDate = new Date(`${fechaStr}T${horaStr}Z`);
+        // Agregamos 'Z' para indicar explícitamente que la hora guardada es UTC
+        const cleanHora = horaStr.includes('Z') ? horaStr : `${horaStr}Z`;
+        const utcDate = new Date(`${fechaStr}T${cleanHora}`);
+        
         return utcDate.toLocaleTimeString('es-ES', {
-            timeZone: clientTimeZone,
+            timeZone: clientTimeZone && clientTimeZone !== 'UTC' ? clientTimeZone : undefined,
             hour: '2-digit',
             minute: '2-digit',
             hour12: true
@@ -243,26 +249,19 @@ function formatUtcToLocal12h(fechaStr, horaStr, clientTimeZone = 'UTC') {
     }
 }
 
-// Cálculo del total de horas trabajadas en el día
+// Cálculo del total de horas trabajadas en el día (sin la "Z" para evitar desfases)
+// Cálculo del total de horas trabajadas en el día (en base UTC exacta)
 function calculateWorkedHours(fechaStr, horaEntrada, horaSalida) {
     if (!horaEntrada || !horaSalida) return '-';
     try {
-        const d1 = new Date(`${fechaStr}T${horaEntrada}Z`);
-        const d2 = new Date(`${fechaStr}T${horaSalida}Z`);
+        const d1 = new Date(`${fechaStr}T${horaEntrada.includes('Z') ? horaEntrada : horaEntrada + 'Z'}`);
+        const d2 = new Date(`${fechaStr}T${horaSalida.includes('Z') ? horaSalida : horaSalida + 'Z'}`);
         const diffMs = d2.getTime() - d1.getTime();
         if (diffMs <= 0) return '0 hrs';
         
-        const totalMinutes = Math.round(diffMs / 60000);
-        const hrs = Math.floor(totalMinutes / 60);
-        const mins = totalMinutes % 60;
-        
-        if (mins === 0) {
-            return `${hrs} ${hrs === 1 ? 'hora' : 'horas'}`;
-        }
-        if (hrs === 0) {
-            return `${mins} min`;
-        }
-        return `${hrs}h ${mins}m`;
+        const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+        const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+        return `${diffHrs} hrs ${diffMins} mins`;
     } catch (e) {
         return '-';
     }
@@ -879,6 +878,7 @@ app.delete('/api/workers/:dni', requireAdmin, async (req, res) => {
 // POST /api/attendance - Record attendance (Admin or Supervisor)
 app.post('/api/attendance', requireAuth, async (req, res) => {
     const { worker_dni, tipo } = req.body;
+    
     if (!worker_dni || !tipo || !['Entrada', 'Salida'].includes(tipo)) {
         return res.status(400).json({ success: false, message: 'Datos inválidos.' });
     }
@@ -897,14 +897,28 @@ app.post('/api/attendance', requireAuth, async (req, res) => {
         }
 
         const worker = workerResult.rows[0];
-        const { fecha, hora } = getLocalTime();
+        
+        // Generar el timestamp exacto en UTC puro
+        const now = new Date();
+        const fecha = now.toISOString().split('T')[0]; // YYYY-MM-DD
+        const hora = now.toISOString().split('T')[1].split('.')[0]; // HH:MM:SS
 
         await db.execute({
             sql: `INSERT INTO attendance (worker_dni, tipo, fecha, hora) VALUES (?, ?, ?, ?)`,
             args: [worker_dni, tipo, fecha, hora]
         });
 
-        res.json({ success: true, nombre: worker.nombre, tipo, fecha, hora });
+        const clientTz = req.headers['x-timezone'] || 'UTC';
+        const horaFormateada = formatUtcToLocal12h(fecha, hora, clientTz);
+
+        res.json({ 
+            success: true, 
+            message: `¡Asistencia (${tipo}) registrada correctamente!`, 
+            nombre: worker.nombre, 
+            tipo, 
+            fecha, 
+            hora: horaFormateada 
+        });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }
@@ -917,9 +931,10 @@ app.get('/api/attendance/:dni', requireAdmin, async (req, res) => {
         return res.status(400).json({ success: false, message: 'DNI inválido.' });
     }
 
+    const clientTz = req.headers['x-timezone'] || req.query.tz || 'UTC';
     let month = req.query.month;
     if (!month) {
-        const { fecha } = getLocalTime();
+        const fecha = getClientDate(clientTz);
         month = fecha.substring(0, 7);
     }
     if (!/^\d{4}-\d{2}$/.test(month)) {
@@ -960,7 +975,8 @@ app.get('/api/attendance', requireAuth, async (req, res) => {
 
 // GET /api/dashboard - Dashboard stats (Admin only)
 app.get('/api/dashboard', requireAdmin, async (req, res) => {
-    const { fecha } = getLocalTime();
+    const clientTz = req.headers['x-timezone'] || req.query.tz || 'UTC';
+    const fecha = getClientDate(clientTz); // Usa la fecha local del cliente
     
     try {
         const totalWorkersRes = await db.execute(`SELECT COUNT(*) as count FROM workers`);
@@ -1103,8 +1119,9 @@ app.get('/api/reports/daily/download', requireAdmin, async (req, res) => {
 
 // GET /api/reports/weekly - Reporte Semanal
 app.get('/api/reports/weekly', requireAdmin, async (req, res) => {
+    const clientTz = req.headers['x-timezone'] || req.query.tz || 'UTC';
     let fecha = req.query.fecha;
-    const { fecha: todayFecha } = getLocalTime();
+    const todayFecha = getClientDate(clientTz);
     if (!fecha) fecha = todayFecha;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
         return res.status(400).json({ success: false, message: 'Formato de fecha inválido (YYYY-MM-DD).' });
@@ -1206,8 +1223,9 @@ app.get('/api/reports/weekly/download', requireAdmin, async (req, res) => {
 
 // GET /api/reports/monthly - Reporte Mensual
 app.get('/api/reports/monthly', requireAdmin, async (req, res) => {
+    const clientTz = req.headers['x-timezone'] || req.query.tz || 'UTC';
     let mes = req.query.mes;
-    const { fecha: todayFecha } = getLocalTime();
+    const todayFecha = getClientDate(clientTz);
     if (!mes) mes = todayFecha.substring(0, 7);
     if (!/^\d{4}-\d{2}$/.test(mes)) {
         return res.status(400).json({ success: false, message: 'Formato de mes inválido (YYYY-MM).' });
