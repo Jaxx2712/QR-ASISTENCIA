@@ -236,7 +236,6 @@ async function loadDailyReport(isSilent = false) {
 }
 
 // Load weekly report
-// Load weekly report
 async function loadWeeklyReport(isSilent = false) {
     const weekInput = document.getElementById('reportWeekDate');
     const selectedDate = (weekInput && weekInput.value) ? weekInput.value : getTodayString();
