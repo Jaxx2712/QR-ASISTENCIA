@@ -236,12 +236,14 @@ async function loadDailyReport(isSilent = false) {
 }
 
 // Load weekly report
+// Load weekly report
 async function loadWeeklyReport(isSilent = false) {
     const weekInput = document.getElementById('reportWeekDate');
     const selectedDate = (weekInput && weekInput.value) ? weekInput.value : getTodayString();
+    const userTz = encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
 
     try {
-        const res = await fetch(`${API_URL}/api/reports/weekly?fecha=${encodeURIComponent(selectedDate)}`);
+        const res = await fetch(`${API_URL}/api/reports/weekly?fecha=${encodeURIComponent(selectedDate)}&tz=${userTz}`);
         if (!res.ok) throw new Error('Error al consultar el reporte semanal');
         const data = await res.json();
 
@@ -259,9 +261,10 @@ async function loadWeeklyReport(isSilent = false) {
 async function loadMonthlyReport(isSilent = false) {
     const monthInput = document.getElementById('reportMonth');
     const selectedMonth = (monthInput && monthInput.value) ? monthInput.value : getCurrentMonthString();
+    const userTz = encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
 
     try {
-        const res = await fetch(`${API_URL}/api/reports/monthly?mes=${encodeURIComponent(selectedMonth)}`);
+        const res = await fetch(`${API_URL}/api/reports/monthly?mes=${encodeURIComponent(selectedMonth)}&tz=${userTz}`);
         if (!res.ok) throw new Error('Error al consultar el reporte mensual');
         const data = await res.json();
 

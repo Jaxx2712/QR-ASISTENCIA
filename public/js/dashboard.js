@@ -118,7 +118,7 @@ async function renderWorkers(workersToRender) {
     const year = now.getFullYear();
     const month = now.getMonth();
 
-    // 1. Obtener la asistencia de todos los trabajadores en paralelo
+    // 1. Obtener la asistencia de todos los trabajadores en paralelo con conversión local
     const attendancePromises = workersToRender.map(async (worker) => {
         let attendanceDays = new Set();
         try {
@@ -126,8 +126,20 @@ async function renderWorkers(workersToRender) {
             if (attRes.ok) {
                 const attData = await attRes.json();
                 attData.forEach(record => {
-                    // Usar directamente record.fecha ('YYYY-MM-DD') para evitar desfases de zona horaria al pintar el calendario
-                    if (record.fecha) {
+                    if (record.fecha && record.hora) {
+                        // Convertir UTC a fecha local del navegador para el mini-calendario
+                        const utcString = `${record.fecha}T${record.hora}Z`;
+                        const localDate = new Date(utcString);
+                        
+                        if (!isNaN(localDate.getTime())) {
+                            const recYear = localDate.getFullYear();
+                            const recMonth = localDate.getMonth();
+                            const recDay = localDate.getDate();
+                            if (recYear === year && recMonth === month) {
+                                attendanceDays.add(recDay);
+                            }
+                        }
+                    } else if (record.fecha) {
                         const [recYear, recMonth, recDay] = record.fecha.split('-').map(Number);
                         if (recYear === year && (recMonth - 1) === month) {
                             attendanceDays.add(recDay);
