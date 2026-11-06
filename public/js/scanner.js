@@ -49,7 +49,7 @@ function startClock() {
 async function startScanner() {
     if (isStartingScanner) return;
     
-    // Si ya hay una instancia corriendo, detenerla primero de forma limpia
+    // Si ya hay una instancia corriendo, detenerla de forma limpia
     if (html5QrcodeScanner) {
         try {
             await stopScannerAsync();
@@ -65,8 +65,25 @@ async function startScanner() {
     try {
         html5QrcodeScanner = new Html5Qrcode('reader');
         
+        // Obtener la lista de cámaras del dispositivo para evitar el crash de JNI en MIUI
+        let cameraConfig = { facingMode: 'environment' };
+        try {
+            const devices = await Html5Qrcode.getCameras();
+            if (devices && devices.length > 0) {
+                // Intentar ubicar la cámara trasera de forma inteligente
+                const backCamera = devices.find(device => {
+                    const label = device.label.toLowerCase();
+                    return label.includes('back') || label.includes('trasera') || label.includes('rear') || label.includes('0');
+                });
+                // Si encuentra la trasera usa su ID específico, si no, usa la última disponible
+                cameraConfig = backCamera ? backCamera.id : devices[devices.length - 1].id;
+            }
+        } catch (camErr) {
+            console.warn('No se pudieron listar cámaras, usando fallback de facingMode', camErr);
+        }
+
         await html5QrcodeScanner.start(
-            { facingMode: 'environment' },
+            cameraConfig,
             { 
                 fps: 10, 
                 qrbox: { width: 250, height: 250 },
@@ -82,7 +99,7 @@ async function startScanner() {
             statusEl.className = 'scanner-status active';
         }
     } catch (err) {
-        console.error('Error al iniciar la cámara:', err);
+        console.error('Error crítico al iniciar la cámara:', err);
         showNotification('No se pudo acceder a la cámara. Verifica los permisos.', 'error');
         html5QrcodeScanner = null;
     } finally {
