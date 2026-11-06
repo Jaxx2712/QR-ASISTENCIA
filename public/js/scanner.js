@@ -1,5 +1,6 @@
 let html5QrcodeScanner = null;
 let activeWorkerData = null;
+let isStartingScanner = false;
 
 function escapeHtml(str) {
     if (str === null || str === undefined) return '';
@@ -45,42 +46,73 @@ function startClock() {
     setInterval(updateTime, 1000);
 }
 
-function startScanner() {
-    if (html5QrcodeScanner) return;
+async function startScanner() {
+    if (isStartingScanner) return;
     
-    const readerElement = document.getElementById('reader');
-    readerElement.style.display = 'block';
-    
-    html5QrcodeScanner = new Html5Qrcode('reader');
-    
-    html5QrcodeScanner.start(
-        { facingMode: 'environment' },
-        { 
-            fps: 10, 
-            qrbox: { width: 250, height: 250 },
-            aspectRatio: 1.0
-        },
-        onScanSuccess,
-        () => {} // Ignore frame errors
-    ).then(() => {
-        document.getElementById('scannerStatus').textContent = 'Cámara activa - Esperando QR...';
-        document.getElementById('scannerStatus').className = 'scanner-status active';
-    }).catch(err => {
-        showNotification('No se pudo acceder a la cámara. Verifica los permisos.', 'error');
-    });
-}
-
-function stopScanner() {
+    // Si ya hay una instancia corriendo, detenerla primero de forma limpia
     if (html5QrcodeScanner) {
-        html5QrcodeScanner.stop().then(() => {
-            html5QrcodeScanner = null;
-            document.getElementById('scannerStatus').textContent = 'Cámara detenida';
-            document.getElementById('scannerStatus').className = 'scanner-status';
-        });
+        try {
+            await stopScannerAsync();
+        } catch (e) {
+            console.error('Error limpiando escáner previo:', e);
+        }
+    }
+    
+    isStartingScanner = true;
+    const readerElement = document.getElementById('reader');
+    if (readerElement) readerElement.style.display = 'block';
+    
+    try {
+        html5QrcodeScanner = new Html5Qrcode('reader');
+        
+        await html5QrcodeScanner.start(
+            { facingMode: 'environment' },
+            { 
+                fps: 10, 
+                qrbox: { width: 250, height: 250 },
+                aspectRatio: 1.0
+            },
+            onScanSuccess,
+            () => {} // Ignorar errores de fotograma
+        );
+
+        const statusEl = document.getElementById('scannerStatus');
+        if (statusEl) {
+            statusEl.textContent = 'Cámara activa - Esperando QR...';
+            statusEl.className = 'scanner-status active';
+        }
+    } catch (err) {
+        console.error('Error al iniciar la cámara:', err);
+        showNotification('No se pudo acceder a la cámara. Verifica los permisos.', 'error');
+        html5QrcodeScanner = null;
+    } finally {
+        isStartingScanner = false;
     }
 }
 
-function onScanSuccess(decodedText) {
+async function stopScannerAsync() {
+    if (html5QrcodeScanner) {
+        try {
+            await html5QrcodeScanner.stop();
+            await html5QrcodeScanner.clear();
+        } catch (e) {
+            console.error('Error al detener el escáner:', e);
+        }
+        html5QrcodeScanner = null;
+        
+        const statusEl = document.getElementById('scannerStatus');
+        if (statusEl) {
+            statusEl.textContent = 'Cámara detenida';
+            statusEl.className = 'scanner-status';
+        }
+    }
+}
+
+function stopScanner() {
+    stopScannerAsync();
+}
+
+async function onScanSuccess(decodedText) {
     try {
         const data = JSON.parse(decodedText);
         if (data.dni && data.nombre) {
@@ -92,18 +124,25 @@ function onScanSuccess(decodedText) {
             
             // Show result section
             const resultSection = document.getElementById('scanResult');
-            resultSection.style.display = 'block';
-            resultSection.classList.add('animate-in');
+            if (resultSection) {
+                resultSection.style.display = 'block';
+                resultSection.classList.add('animate-in');
+            }
             
             // Update worker info
             const initials = data.nombre.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-            document.getElementById('resultAvatar').textContent = initials;
-            document.getElementById('resultAvatar').style.backgroundColor = getAvatarColor(data.nombre);
-            document.getElementById('resultName').textContent = data.nombre;
-            document.getElementById('resultDni').textContent = `DNI: ${data.dni}`;
+            const avatarEl = document.getElementById('resultAvatar');
+            if (avatarEl) {
+                avatarEl.textContent = initials;
+                avatarEl.style.backgroundColor = getAvatarColor(data.nombre);
+            }
+            const nameEl = document.getElementById('resultName');
+            if (nameEl) nameEl.textContent = data.nombre;
+            const dniEl = document.getElementById('resultDni');
+            if (dniEl) dniEl.textContent = `DNI: ${data.dni}`;
             
-            // Stop scanner temporarily
-            stopScanner();
+            // Detener el escáner de forma segura y controlada con await
+            await stopScannerAsync();
             
             // Play a subtle beep/vibration if available
             if (navigator.vibrate) navigator.vibrate(200);
