@@ -48,48 +48,78 @@ function startClock() {
 
 async function startScanner() {
     if (isStartingScanner) return;
-    
-    // 1. Limpiar cualquier instancia previa de forma segura
-    if (html5QrcodeScanner) {
-        try {
-            await stopScannerAsync();
-        } catch (e) {
-            console.error('Error limpiando escáner previo:', e);
-        }
-    }
-    
     isStartingScanner = true;
+
     const readerElement = document.getElementById('reader');
     if (readerElement) readerElement.style.display = 'block';
-    
+
     try {
+        // 1. Limpiar cualquier instancia previa de forma segura y completa
+        if (html5QrcodeScanner) {
+            try {
+                await html5QrcodeScanner.stop();
+                await html5QrcodeScanner.clear();
+            } catch (e) {
+                console.warn('Aviso al limpiar instancia anterior:', e);
+            }
+            html5QrcodeScanner = null;
+        }
+
         html5QrcodeScanner = new Html5Qrcode('reader');
         
-        // 2. Configuración optimizada para aliviar la carga gráfica en WebView móviles
         const config = { 
-            fps: 5,                     // Reducir a 5 FPS evita que el procesador móvil colapse
-            qrbox: { width: 220, height: 220 },
+            fps: 10,
+            qrbox: { width: 250, height: 250 },
             aspectRatio: 1.0,
-            disableFlip: true           // Desactiva efectos innecesarios para ahorrar memoria
+            disableFlip: true
         };
 
-        // 3. Iniciar video en vivo con facingMode directo y seguro
+        // 2. Detectar cámaras disponibles para evitar errores de restricciones en Android
+        let cameraTarget = { facingMode: 'environment' };
+        try {
+            const devices = await Html5Qrcode.getCameras();
+            if (devices && devices.length > 0) {
+                const backCamera = devices.find(device => /back|rear|environment|traseira/i.test(device.label));
+                cameraTarget = backCamera ? backCamera.id : devices[0].id;
+            }
+        } catch (camErr) {
+            console.warn('No se pudo listar cámaras, usando facingMode por defecto:', camErr);
+        }
+
+        // 3. Iniciar el escáner con el objetivo seleccionado
         await html5QrcodeScanner.start(
-            { facingMode: 'environment' },
+            cameraTarget,
             config,
             onScanSuccess,
-            () => {} // Ignorar errores por fotograma vacío
+            (errorMessage) => {
+                // Ignorar fotogramas vacíos para optimizar rendimiento
+            }
         );
 
         const statusEl = document.getElementById('scannerStatus');
         if (statusEl) {
-            statusEl.textContent = 'Cámara activa - Esperando QR...';
+            statusEl.textContent = 'Cámara activa - Escaneando...';
             statusEl.className = 'scanner-status active';
         }
     } catch (err) {
-        console.error('Error crítico al iniciar video en la cámara:', err);
-        showNotification('No se pudo acceder a la cámara. Verifica los permisos.', 'error');
-        html5QrcodeScanner = null;
+        console.error('Error crítico al iniciar la cámara:', err);
+        
+        // Fallback automático a la cámara frontal o genérica si falla la trasera
+        try {
+            if (html5QrcodeScanner) {
+                await html5QrcodeScanner.start(
+                    { facingMode: 'user' },
+                    { fps: 10, qrbox: { width: 250, height: 250 } },
+                    onScanSuccess,
+                    () => {}
+                );
+                return;
+            }
+        } catch (fallbackErr) {
+            console.error('Fallo total de acceso a cámara:', fallbackErr);
+        }
+
+        showNotification('No se pudo acceder a la cámara. Verifica los permisos de la aplicación.', 'error');
     } finally {
         isStartingScanner = false;
     }
