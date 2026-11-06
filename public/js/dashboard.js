@@ -381,14 +381,25 @@ async function loadModalCalendar(workerDni, year, month) {
     // 1. Agrupar registros por fecha 'YYYY-MM-DD' separando Entrada y Salida
     const attendanceMap = {};
     records.forEach(r => {
-        if (r.fecha) {
-            if (!attendanceMap[r.fecha]) {
-                attendanceMap[r.fecha] = { entrada: null, salida: null };
-            }
-            if (r.tipo === 'Entrada' || r.tipo === 'entrada') {
-                attendanceMap[r.fecha].entrada = r.hora;
-            } else if (r.tipo === 'Salida' || r.tipo === 'salida') {
-                attendanceMap[r.fecha].salida = r.hora;
+        if (r.fecha && r.hora) {
+            // Convertir UTC a objeto Date local
+            const utcString = `${r.fecha}T${r.hora}Z`;
+            const localDate = new Date(utcString);
+            
+            if (!isNaN(localDate.getTime())) {
+                const locYear = localDate.getFullYear();
+                const locMonth = String(localDate.getMonth() + 1).padStart(2, '0');
+                const locDay = String(localDate.getDate()).padStart(2, '0');
+                const localDateKey = `${locYear}-${locMonth}-${locDay}`;
+
+                if (!attendanceMap[localDateKey]) {
+                    attendanceMap[localDateKey] = { entrada: null, salida: null };
+                }
+                if (r.tipo === 'Entrada' || r.tipo === 'entrada') {
+                    attendanceMap[localDateKey].entrada = r.hora;
+                } else if (r.tipo === 'Salida' || r.tipo === 'salida') {
+                    attendanceMap[localDateKey].salida = r.hora;
+                }
             }
         }
     });
