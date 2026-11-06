@@ -218,7 +218,9 @@ function calculateClientHoursWorked(fechaStr, entrada, salida) {
 async function loadDailyReport(isSilent = false) {
     const dateInput = document.getElementById('reportDate');
     const selectedDate = (dateInput && dateInput.value) ? dateInput.value : getTodayString();
-    const userTz = encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+    
+    // Enviar explícitamente la zona horaria del navegador al backend
+    const userTz = encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Caracas');
 
     try {
         const res = await fetch(`${API_URL}/api/reports/daily?fecha=${encodeURIComponent(selectedDate)}&tz=${userTz}`);
@@ -279,10 +281,10 @@ async function loadMonthlyReport(isSilent = false) {
 
 // Render Daily Table (con 5 columnas incluyendo horas trabajadas)
 function renderDailyTable(data) {
-    const diaNumber = data.dia;
+    const diaNumber = data.dia || data.fecha;
     const records = data.records || [];
     
-    const titleText = data.titulo || `Dia ${diaNumber}`;
+    const titleText = data.titulo || `Día ${diaNumber}`;
     const titleCell = document.getElementById('excelTableTitle');
     if (titleCell) {
         titleCell.textContent = titleText;
@@ -291,7 +293,8 @@ function renderDailyTable(data) {
     const thCol5 = document.getElementById('thCol5');
     if (thCol5) thCol5.style.display = '';
 
-    document.getElementById('badgeDiaTitle').textContent = `Dia ${diaNumber}`;
+    const badgeTitleEl = document.getElementById('badgeDiaTitle');
+    if (badgeTitleEl) badgeTitleEl.textContent = `Día ${data.fecha || diaNumber}`;
 
     let totalAttended = records.length;
     let presentCount = 0;
@@ -305,15 +308,21 @@ function renderDailyTable(data) {
         }
     });
 
-    document.getElementById('statVal1').textContent = totalAttended;
-    document.getElementById('statVal2').textContent = presentCount;
-    document.getElementById('statVal3').textContent = exitedCount;
+    const stat1 = document.getElementById('statVal1');
+    const stat2 = document.getElementById('statVal2');
+    const stat3 = document.getElementById('statVal3');
+    if (stat1) stat1.textContent = totalAttended;
+    if (stat2) stat2.textContent = presentCount;
+    if (stat3) stat3.textContent = exitedCount;
 
-    // APLICAMOS LA CONVERSIÓN A HORA LOCAL Y CÁLCULO DE HORAS TRABAJADAS:
+    // Renderizar filas convirtiendo cada hora usando la fecha base del reporte
     renderTableBody(records, rec => {
-        const localEntrada = formatLocalTime(data.fecha, rec.hora_entrada);
-        const localSalida = formatLocalTime(data.fecha, rec.hora_salida);
-        const horas = rec.total_horas || calculateClientHoursWorked(data.fecha, rec.hora_entrada, rec.hora_salida);
+        // Usar la fecha del registro o la fecha consultada como base para formatear la hora local
+        const recordDate = rec.fecha || data.fecha;
+        const localEntrada = formatLocalTime(recordDate, rec.hora_entrada);
+        const localSalida = formatLocalTime(recordDate, rec.hora_salida);
+        const horas = rec.total_horas || calculateClientHoursWorked(recordDate, rec.hora_entrada, rec.hora_salida);
+        
         return `
             <td>${escapeHtml(rec.dni)}</td>
             <td>${escapeHtml(rec.nombre)}</td>
