@@ -184,7 +184,7 @@ function scanFrame() {
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
         const code = jsQR(imageData.data, imageData.width, imageData.height, {
-            inversionAttempts: 'dontInvert'
+            inversionAttempts: 'attemptBoth'
         });
 
         if (code && code.data) {
@@ -202,47 +202,56 @@ function scanFrame() {
 
 async function onScanSuccess(decodedText) {
     try {
-        const data = JSON.parse(decodedText);
-        if (data.dni && data.nombre) {
-            if (!/^\d{8}$/.test(data.dni)) {
+        let dni = '';
+        let nombre = 'Trabajador';
+
+        // Intentar parsear como JSON por si el QR fue generado con objeto
+        try {
+            const data = JSON.parse(decodedText);
+            dni = data.dni || '';
+            nombre = data.nombre || 'Trabajador';
+        } catch (e) {
+            // Si no es JSON, asumimos que el texto escaneado es directamente el DNI
+            dni = decodedText.trim();
+        }
+
+        if (dni) {
+            if (!/^\d{8}$/.test(dni)) {
                 showNotification('QR inválido: Formato de DNI incorrecto.', 'error');
-                // Continuar escaneando
                 if (isScanningActive) scanAnimFrameId = requestAnimationFrame(scanFrame);
                 return;
             }
-            activeWorkerData = data;
+
+            // Opcional: Consultar los datos del trabajador al servidor si solo tenemos el DNI
+            activeWorkerData = { dni: dni, nombre: nombre };
             
-            // Mostrar sección de resultado
             const resultSection = document.getElementById('scanResult');
             if (resultSection) {
                 resultSection.style.display = 'block';
                 resultSection.classList.add('animate-in');
             }
             
-            // Actualizar info del trabajador
-            const initials = data.nombre.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+            const initials = nombre.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
             const avatarEl = document.getElementById('resultAvatar');
             if (avatarEl) {
                 avatarEl.textContent = initials;
-                avatarEl.style.backgroundColor = getAvatarColor(data.nombre);
+                avatarEl.style.backgroundColor = getAvatarColor(nombre);
             }
             const nameEl = document.getElementById('resultName');
-            if (nameEl) nameEl.textContent = data.nombre;
+            if (nameEl) nameEl.textContent = nombre;
             const dniEl = document.getElementById('resultDni');
-            if (dniEl) dniEl.textContent = `DNI: ${data.dni}`;
+            if (dniEl) dniEl.textContent = `DNI: ${dni}`;
             
-            // Detener el escáner mientras se confirma entrada/salida
+            // Detener la cámara mientras el usuario confirma Entrada o Salida
             await stopScannerAsync();
             
-            // Vibración háptica suave si está soportada
             if (navigator.vibrate) navigator.vibrate(200);
         } else {
-            // QR válido pero sin datos esperados, continuar escaneando
             if (isScanningActive) scanAnimFrameId = requestAnimationFrame(scanFrame);
         }
     } catch (e) {
+        console.error('Error procesando QR:', e);
         showNotification('QR no reconocido. Intenta de nuevo.', 'error');
-        // Continuar escaneando
         if (isScanningActive) scanAnimFrameId = requestAnimationFrame(scanFrame);
     }
 }
