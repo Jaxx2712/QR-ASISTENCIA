@@ -182,16 +182,18 @@ body {
     flex-direction: column;
     min-height: 100vh;
     min-width: 0;
-    max-width: 100%;
-    width: 100%; /* Esto mantiene el teléfono intacto como al principio */
+    width: calc(100% - var(--sidebar-width));
+    max-width: calc(100% - var(--sidebar-width));
     overflow-x: hidden;
     transition: var(--transition);
+    box-sizing: border-box;
 }
 
-/* El ancho ajustado para el menú solo aplica en pantallas de PC (mayores a 992px) */
-@media (min-width: 993px) {
+@media (max-width: 992px) {
     .main-content {
-        width: calc(100% - var(--sidebar-width));
+        margin-left: 0;
+        width: 100%;
+        max-width: 100%;
     }
 }
 
@@ -811,6 +813,8 @@ input[type="file"]::file-selector-button:hover {
     }
     .main-content {
         margin-left: 0;
+        width: 100%;
+        max-width: 100%;
     }
     .menu-toggle {
         display: inline-flex;

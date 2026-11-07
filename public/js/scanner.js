@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(loadRecentActivity, 10000);
 });
 
-// Live real-time clock
+// Live real-time clock (local al dispositivo)
 function startClock() {
     const clockEl = document.getElementById('clock');
     if (!clockEl) return;
@@ -46,92 +46,15 @@ function startClock() {
     setInterval(updateTime, 1000);
 }
 
-async function startScanner() {
-    if (isStartingScanner) return;
-    isStartingScanner = true;
-
-    const readerElement = document.getElementById('reader');
-    if (readerElement) readerElement.style.display = 'block';
-
-    try {
-        // 1. Limpiar cualquier instancia previa de forma segura y completa
-        if (html5QrcodeScanner) {
-            try {
-                await html5QrcodeScanner.stop();
-                await html5QrcodeScanner.clear();
-            } catch (e) {
-                console.warn('Aviso al limpiar instancia anterior:', e);
-            }
-            html5QrcodeScanner = null;
-        }
-
-        html5QrcodeScanner = new Html5Qrcode('reader');
-        
-        const config = { 
-            fps: 10,
-            qrbox: { width: 250, height: 250 },
-            aspectRatio: 1.0,
-            disableFlip: true
-        };
-
-        // 2. Detectar cámaras disponibles para evitar errores de restricciones en Android
-        let cameraTarget = { facingMode: 'environment' };
-        try {
-            const devices = await Html5Qrcode.getCameras();
-            if (devices && devices.length > 0) {
-                const backCamera = devices.find(device => /back|rear|environment|traseira/i.test(device.label));
-                cameraTarget = backCamera ? backCamera.id : devices[0].id;
-            }
-        } catch (camErr) {
-            console.warn('No se pudo listar cámaras, usando facingMode por defecto:', camErr);
-        }
-
-        // 3. Iniciar el escáner con el objetivo seleccionado
-        await html5QrcodeScanner.start(
-            cameraTarget,
-            config,
-            onScanSuccess,
-            (errorMessage) => {
-                // Ignorar fotogramas vacíos para optimizar rendimiento
-            }
-        );
-
-        const statusEl = document.getElementById('scannerStatus');
-        if (statusEl) {
-            statusEl.textContent = 'Cámara activa - Escaneando...';
-            statusEl.className = 'scanner-status active';
-        }
-    } catch (err) {
-        console.error('Error crítico al iniciar la cámara:', err);
-        
-        // Fallback automático a la cámara frontal o genérica si falla la trasera
-        try {
-            if (html5QrcodeScanner) {
-                await html5QrcodeScanner.start(
-                    { facingMode: 'user' },
-                    { fps: 10, qrbox: { width: 250, height: 250 } },
-                    onScanSuccess,
-                    () => {}
-                );
-                return;
-            }
-        } catch (fallbackErr) {
-            console.error('Fallo total de acceso a cámara:', fallbackErr);
-        }
-
-        showNotification('No se pudo acceder a la cámara. Verifica los permisos de la aplicación.', 'error');
-    } finally {
-        isStartingScanner = false;
-    }
-}
-
 async function stopScannerAsync() {
     if (html5QrcodeScanner) {
         try {
-            await html5QrcodeScanner.stop();
+            if (html5QrcodeScanner.isScanning) {
+                await html5QrcodeScanner.stop();
+            }
             await html5QrcodeScanner.clear();
         } catch (e) {
-            console.error('Error al detener el escáner:', e);
+            console.warn('Aviso al detener el escáner:', e);
         }
         html5QrcodeScanner = null;
         
@@ -145,6 +68,75 @@ async function stopScannerAsync() {
 
 function stopScanner() {
     stopScannerAsync();
+}
+
+async function startScanner() {
+    if (isStartingScanner) return;
+    isStartingScanner = true;
+
+    const readerElement = document.getElementById('reader');
+    if (readerElement) readerElement.style.display = 'block';
+
+    try {
+        // 1. Limpieza segura y completa de cualquier instancia previa
+        await stopScannerAsync();
+
+        // 2. Instancia nueva de Html5Qrcode
+        html5QrcodeScanner = new Html5Qrcode('reader');
+        
+        const config = { 
+            fps: 10,
+            qrbox: { width: 250, height: 250 },
+            aspectRatio: 1.0,
+            disableFlip: true
+        };
+
+        // 3. Iniciar cámara trasera de forma segura con facingMode 'environment'
+        // Esto evita enumerar dispositivos y previene pasar IDs nulos/vacíos a Chromium
+        await html5QrcodeScanner.start(
+            { facingMode: 'environment' },
+            config,
+            onScanSuccess,
+            () => {} // Ignorar fotogramas sin QR para fluidez
+        );
+
+        const statusEl = document.getElementById('scannerStatus');
+        if (statusEl) {
+            statusEl.textContent = 'Cámara activa - Escaneando...';
+            statusEl.className = 'scanner-status active';
+        }
+    } catch (err) {
+        console.warn('Aviso al iniciar cámara trasera, probando fallback:', err);
+        
+        // Fallback controlado a cámara frontal o genérica
+        try {
+            if (html5QrcodeScanner) {
+                await html5QrcodeScanner.start(
+                    { facingMode: 'user' },
+                    { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0, disableFlip: true },
+                    onScanSuccess,
+                    () => {}
+                );
+                const statusEl = document.getElementById('scannerStatus');
+                if (statusEl) {
+                    statusEl.textContent = 'Cámara activa (Frontal) - Escaneando...';
+                    statusEl.className = 'scanner-status active';
+                }
+                return;
+            }
+        } catch (fallbackErr) {
+            console.error('Fallo en fallback de cámara:', fallbackErr);
+        }
+
+        showNotification('No se pudo acceder a la cámara. Verifica los permisos de la aplicación.', 'error');
+        const statusEl = document.getElementById('scannerStatus');
+        if (statusEl) {
+            statusEl.textContent = 'Cámara no disponible';
+            statusEl.className = 'scanner-status';
+        }
+    } finally {
+        isStartingScanner = false;
+    }
 }
 
 async function onScanSuccess(decodedText) {
@@ -176,10 +168,10 @@ async function onScanSuccess(decodedText) {
             const dniEl = document.getElementById('resultDni');
             if (dniEl) dniEl.textContent = `DNI: ${data.dni}`;
             
-            // Detener el escáner de forma segura y controlada con await
+            // Detener el escáner de forma limpia mientras se confirma entrada/salida
             await stopScannerAsync();
             
-            // Play a subtle beep/vibration if available
+            // Vibración háptica suave si está soportada
             if (navigator.vibrate) navigator.vibrate(200);
         }
     } catch (e) {
@@ -210,7 +202,7 @@ async function recordAttendance(tipo) {
             showNotification(data.message || `¡Asistencia (${tipo.toUpperCase()}) registrada correctamente!`, 'success');
             document.getElementById('scanResult').style.display = 'none';
             activeWorkerData = null;
-            startScanner();
+            await startScanner();
             loadRecentActivity();
         } else {
             showNotification(data.message || 'Error al registrar asistencia', 'error');
@@ -237,15 +229,16 @@ async function loadRecentActivity() {
             const safeDni = escapeHtml(record.worker_dni || record.id);
             const safeTipo = escapeHtml(record.tipo || record.type);
             
-            // Convertir UTC a hora local del navegador añadiendo 'Z'
+            // Convertir UTC a hora y fecha local del dispositivo
             let safeHora = '--:--:--';
             let safeFecha = '--/--/----';
             if (record.fecha && record.hora) {
-                const utcString = `${record.fecha}T${record.hora}Z`;
+                const cleanHora = record.hora.includes('Z') ? record.hora : `${record.hora}Z`;
+                const utcString = `${record.fecha}T${cleanHora}`;
                 const localDate = new Date(utcString);
                 if (!isNaN(localDate.getTime())) {
-                    safeHora = escapeHtml(localDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-                    safeFecha = escapeHtml(localDate.toLocaleDateString('es-ES', { year: 'numeric', month: '2-digit', day: '2-digit' }).split('/').reverse().join('-'));
+                    safeHora = escapeHtml(localDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+                    safeFecha = escapeHtml(localDate.toLocaleDateString([], { year: 'numeric', month: '2-digit', day: '2-digit' }));
                 } else {
                     safeHora = escapeHtml(record.hora);
                     safeFecha = escapeHtml(record.fecha);

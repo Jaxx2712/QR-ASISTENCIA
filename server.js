@@ -226,38 +226,72 @@ function getClientDate(clientTimeZone = 'UTC') {
     }
 }
 
-// Helper para convertir la hora UTC a la zona horaria del cliente (12h am/pm)
-function formatUtcToLocal12h(fechaStr, horaStr, clientTimeZone = 'UTC') {
-    if (!horaStr || !fechaStr) return '';
+// Obtener información local de un registro UTC (fecha local YYYY-MM-DD y horas en formato 12h y 24h)
+function getRecordLocalInfo(fechaStr, horaStr, clientTimeZone = 'UTC') {
+    if (!fechaStr || !horaStr) {
+        return { localDate: fechaStr || '', localTime24: horaStr || '', localTime12: horaStr || '', utcDate: null };
+    }
     try {
-        // Agregamos 'Z' para indicar explícitamente que la hora guardada es UTC
         const cleanHora = horaStr.includes('Z') ? horaStr : `${horaStr}Z`;
         const utcDate = new Date(`${fechaStr}T${cleanHora}`);
-        
-        return utcDate.toLocaleTimeString('es-ES', {
-            timeZone: clientTimeZone && clientTimeZone !== 'UTC' ? clientTimeZone : undefined,
+        if (isNaN(utcDate.getTime())) {
+            return { localDate: fechaStr, localTime24: horaStr, localTime12: horaStr, utcDate: null };
+        }
+        const localDate = utcDate.toLocaleDateString('en-CA', { timeZone: clientTimeZone });
+        const localTime24 = utcDate.toLocaleTimeString('es-ES', {
+            timeZone: clientTimeZone,
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        });
+        const localTime12 = utcDate.toLocaleTimeString('es-ES', {
+            timeZone: clientTimeZone,
             hour: '2-digit',
             minute: '2-digit',
             hour12: true
         });
+        return { localDate, localTime24, localTime12, utcDate };
     } catch (e) {
-        return formatTime12h(horaStr);
+        return { localDate: fechaStr, localTime24: horaStr, localTime12: horaStr, utcDate: null };
     }
 }
 
-// Cálculo del total de horas trabajadas en el día (sin la "Z" para evitar desfases)
+// Helper para convertir la hora UTC a la zona horaria del cliente (12h am/pm)
+function formatUtcToLocal12h(fechaStr, horaStr, clientTimeZone = 'UTC') {
+    return getRecordLocalInfo(fechaStr, horaStr, clientTimeZone).localTime12;
+}
+
+// Cálculo del total de horas trabajadas entre dos objetos Date
+function calculateWorkedHoursBetweenDates(dateEntrada, dateSalida) {
+    if (!dateEntrada || !dateSalida) return '-';
+    try {
+        const diffMs = dateSalida.getTime() - dateEntrada.getTime();
+        if (diffMs <= 0) return '0 hrs';
+        const totalMinutes = Math.round(diffMs / 60000);
+        const hrs = Math.floor(totalMinutes / 60);
+        const mins = totalMinutes % 60;
+        if (mins === 0) return `${hrs} hrs`;
+        if (hrs === 0) return `${mins} mins`;
+        return `${hrs} hrs ${mins} mins`;
+    } catch (e) {
+        return '-';
+    }
+}
+
 // Cálculo del total de horas trabajadas en el día (en base UTC exacta)
 function calculateWorkedHours(fechaStr, horaEntrada, horaSalida) {
     if (!horaEntrada || !horaSalida) return '-';
     try {
-        const d1 = new Date(`${fechaStr}T${horaEntrada.includes('Z') ? horaEntrada : horaEntrada + 'Z'}`);
-        const d2 = new Date(`${fechaStr}T${horaSalida.includes('Z') ? horaSalida : horaSalida + 'Z'}`);
-        const diffMs = d2.getTime() - d1.getTime();
-        if (diffMs <= 0) return '0 hrs';
-        
-        const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
-        const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-        return `${diffHrs} hrs ${diffMins} mins`;
+        const cleanEntrada = horaEntrada.includes('Z') ? horaEntrada : `${horaEntrada}Z`;
+        const cleanSalida = horaSalida.includes('Z') ? horaSalida : `${horaSalida}Z`;
+        const d1 = new Date(`${fechaStr}T${cleanEntrada}`);
+        let d2 = new Date(`${fechaStr}T${cleanSalida}`);
+        if (isNaN(d1.getTime()) || isNaN(d2.getTime())) return '-';
+        if (d2 <= d1) {
+            d2.setDate(d2.getDate() + 1);
+        }
+        return calculateWorkedHoursBetweenDates(d1, d2);
     } catch (e) {
         return '-';
     }
@@ -921,10 +955,22 @@ app.get('/api/attendance/:dni', requireAdmin, async (req, res) => {
     
     try {
         const result = await db.execute({
-            sql: `SELECT * FROM attendance WHERE worker_dni = ? AND fecha LIKE ? ORDER BY timestamp DESC`,
-            args: [dni, `${month}%`]
+            sql: `SELECT * FROM attendance WHERE worker_dni = ? ORDER BY timestamp DESC`,
+            args: [dni]
         });
-        res.json(result.rows);
+        const rows = [];
+        for (const row of result.rows) {
+            const info = getRecordLocalInfo(row.fecha, row.hora, clientTz);
+            if (info.localDate && info.localDate.startsWith(month)) {
+                rows.push({
+                    ...row,
+                    fecha_local: info.localDate,
+                    hora_local: info.localTime12,
+                    hora_local_24: info.localTime24
+                });
+            }
+        }
+        res.json(rows);
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }
@@ -941,10 +987,15 @@ app.get('/api/attendance', requireAuth, async (req, res) => {
             sql: `SELECT a.*, w.nombre FROM attendance a JOIN workers w ON a.worker_dni = w.dni ORDER BY a.timestamp DESC LIMIT ?`,
             args: [limit]
         });
-        const rows = result.rows.map(row => ({
-            ...row,
-            hora_local: formatUtcToLocal12h(row.fecha, row.hora, clientTz)
-        }));
+        const rows = result.rows.map(row => {
+            const info = getRecordLocalInfo(row.fecha, row.hora, clientTz);
+            return {
+                ...row,
+                fecha_local: info.localDate,
+                hora_local: info.localTime12,
+                hora_local_24: info.localTime24
+            };
+        });
         res.json(rows);
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -960,26 +1011,37 @@ app.get('/api/dashboard', requireAdmin, async (req, res) => {
         const totalWorkersRes = await db.execute(`SELECT COUNT(*) as count FROM workers`);
         const totalWorkers = Number(totalWorkersRes.rows[0]?.count || 0);
 
-        const attendanceTodayRes = await db.execute({
-            sql: `SELECT COUNT(DISTINCT worker_dni) as count FROM attendance WHERE fecha = ? AND tipo = 'Entrada'`,
-            args: [fecha]
-        });
-        const attendanceToday = Number(attendanceTodayRes.rows[0]?.count || 0);
-
-        const workersPresentRes = await db.execute({
+        // Consultar registros en un rango de +/- 1 día alrededor de la fecha para filtrar por fecha local exacta
+        const attendanceRes = await db.execute({
             sql: `
-                SELECT COUNT(*) as count 
-                FROM (
-                    SELECT worker_dni, tipo, 
-                            ROW_NUMBER() OVER(PARTITION BY worker_dni ORDER BY timestamp DESC) as rn 
-                    FROM attendance 
-                    WHERE fecha = ?
-                ) 
-                WHERE rn = 1 AND tipo = 'Entrada'
+                SELECT worker_dni, tipo, fecha, hora, timestamp
+                FROM attendance
+                WHERE fecha BETWEEN date(?, '-1 day') AND date(?, '+1 day')
+                ORDER BY timestamp ASC
             `,
-            args: [fecha]
+            args: [fecha, fecha]
         });
-        const workersPresent = Number(workersPresentRes.rows[0]?.count || 0);
+
+        const attendedWorkers = new Set();
+        const latestActionMap = new Map(); // worker_dni -> tipo
+
+        for (const row of attendanceRes.rows) {
+            const info = getRecordLocalInfo(row.fecha, row.hora, clientTz);
+            if (info.localDate === fecha) {
+                if (row.tipo === 'Entrada') {
+                    attendedWorkers.add(row.worker_dni);
+                }
+                latestActionMap.set(row.worker_dni, row.tipo);
+            }
+        }
+
+        const attendanceToday = attendedWorkers.size;
+        let workersPresent = 0;
+        for (const tipo of latestActionMap.values()) {
+            if (tipo === 'Entrada') {
+                workersPresent++;
+            }
+        }
 
         res.json({ totalWorkers, attendanceToday, workersPresent });
     } catch (err) {
@@ -1006,29 +1068,65 @@ app.get('/api/reports/daily', requireAdmin, async (req, res) => {
         const result = await db.execute({
             sql: `
                 SELECT 
-                    w.dni,
+                    a.worker_dni,
                     w.nombre,
-                    MIN(CASE WHEN a.tipo = 'Entrada' THEN a.hora END) as hora_entrada,
-                    MAX(CASE WHEN a.tipo = 'Salida' THEN a.hora END) as hora_salida
+                    a.tipo,
+                    a.fecha,
+                    a.hora,
+                    a.timestamp
                 FROM attendance a
                 JOIN workers w ON a.worker_dni = w.dni
-                WHERE a.fecha = ?
-                GROUP BY w.dni, w.nombre
-                ORDER BY hora_entrada ASC, w.nombre ASC
+                WHERE a.fecha BETWEEN date(?, '-1 day') AND date(?, '+1 day')
+                ORDER BY a.timestamp ASC
             `,
-            args: [fecha]
+            args: [fecha, fecha]
         });
 
+        const workerMap = new Map();
+        for (const row of result.rows) {
+            const info = getRecordLocalInfo(row.fecha, row.hora, clientTz);
+            if (info.localDate === fecha) {
+                if (!workerMap.has(row.worker_dni)) {
+                    workerMap.set(row.worker_dni, {
+                        dni: row.worker_dni,
+                        nombre: row.nombre,
+                        entradaDate: null,
+                        salidaDate: null,
+                        hora_entrada: '',
+                        hora_salida: '',
+                        hora_entrada_fmt: '',
+                        hora_salida_fmt: ''
+                    });
+                }
+                const w = workerMap.get(row.worker_dni);
+                if (row.tipo === 'Entrada') {
+                    if (!w.entradaDate || (info.utcDate && info.utcDate < w.entradaDate)) {
+                        w.entradaDate = info.utcDate;
+                        w.hora_entrada = info.localTime24;
+                        w.hora_entrada_fmt = info.localTime12;
+                    }
+                } else if (row.tipo === 'Salida') {
+                    if (!w.salidaDate || (info.utcDate && info.utcDate > w.salidaDate)) {
+                        w.salidaDate = info.utcDate;
+                        w.hora_salida = info.localTime24;
+                        w.hora_salida_fmt = info.localTime12;
+                    }
+                }
+            }
+        }
+
         const dayNumber = parseInt(fecha.split('-')[2], 10);
-        const records = result.rows.map(row => ({
-            dni: row.dni,
-            nombre: row.nombre,
-            hora_entrada: row.hora_entrada,
-            hora_salida: row.hora_salida,
-            hora_entrada_fmt: formatUtcToLocal12h(fecha, row.hora_entrada, clientTz),
-            hora_salida_fmt: formatUtcToLocal12h(fecha, row.hora_salida, clientTz),
-            total_horas: calculateWorkedHours(fecha, row.hora_entrada, row.hora_salida)
+        const records = Array.from(workerMap.values()).map(w => ({
+            dni: w.dni,
+            nombre: w.nombre,
+            hora_entrada: w.hora_entrada,
+            hora_salida: w.hora_salida,
+            hora_entrada_fmt: w.hora_entrada_fmt,
+            hora_salida_fmt: w.hora_salida_fmt,
+            total_horas: calculateWorkedHoursBetweenDates(w.entradaDate, w.salidaDate)
         }));
+
+        records.sort((a, b) => (a.hora_entrada || '99').localeCompare(b.hora_entrada || '99') || a.nombre.localeCompare(b.nombre));
 
         res.json({
             success: true,
@@ -1044,7 +1142,7 @@ app.get('/api/reports/daily', requireAdmin, async (req, res) => {
 
 // GET /api/reports/daily/download - Descarga Excel Diario con Hora Local y Total de Horas Trabajadas
 app.get('/api/reports/daily/download', requireAdmin, async (req, res) => {
-    const clientTz = req.query.tz || req.headers['x-timezone'] || 'UTC'; // Captura la zona horaria enviada por el frontend
+    const clientTz = req.query.tz || req.headers['x-timezone'] || 'UTC';
     let fecha = req.query.fecha;
     
     if (!fecha) {
@@ -1058,28 +1156,72 @@ app.get('/api/reports/daily/download', requireAdmin, async (req, res) => {
         const result = await db.execute({
             sql: `
                 SELECT 
-                    w.dni,
+                    a.worker_dni,
                     w.nombre,
-                    MIN(CASE WHEN a.tipo = 'Entrada' THEN a.hora END) as hora_entrada,
-                    MAX(CASE WHEN a.tipo = 'Salida' THEN a.hora END) as hora_salida
+                    a.tipo,
+                    a.fecha,
+                    a.hora,
+                    a.timestamp
                 FROM attendance a
                 JOIN workers w ON a.worker_dni = w.dni
-                WHERE a.fecha = ?
-                GROUP BY w.dni, w.nombre
-                ORDER BY hora_entrada ASC, w.nombre ASC
+                WHERE a.fecha BETWEEN date(?, '-1 day') AND date(?, '+1 day')
+                ORDER BY a.timestamp ASC
             `,
-            args: [fecha]
+            args: [fecha, fecha]
         });
 
+        const workerMap = new Map();
+        for (const row of result.rows) {
+            const info = getRecordLocalInfo(row.fecha, row.hora, clientTz);
+            if (info.localDate === fecha) {
+                if (!workerMap.has(row.worker_dni)) {
+                    workerMap.set(row.worker_dni, {
+                        dni: row.worker_dni,
+                        nombre: row.nombre,
+                        entradaDate: null,
+                        salidaDate: null,
+                        hora_entrada: '',
+                        hora_salida: '',
+                        hora_entrada_fmt: '',
+                        hora_salida_fmt: ''
+                    });
+                }
+                const w = workerMap.get(row.worker_dni);
+                if (row.tipo === 'Entrada') {
+                    if (!w.entradaDate || (info.utcDate && info.utcDate < w.entradaDate)) {
+                        w.entradaDate = info.utcDate;
+                        w.hora_entrada = info.localTime24;
+                        w.hora_entrada_fmt = info.localTime12;
+                    }
+                } else if (row.tipo === 'Salida') {
+                    if (!w.salidaDate || (info.utcDate && info.utcDate > w.salidaDate)) {
+                        w.salidaDate = info.utcDate;
+                        w.hora_salida = info.localTime24;
+                        w.hora_salida_fmt = info.localTime12;
+                    }
+                }
+            }
+        }
+
         const dayNumber = parseInt(fecha.split('-')[2], 10);
-        
-        // Mapea las filas aplicando la conversión a la zona horaria local del usuario y calculando las horas trabajadas
-        const rows = result.rows.map(row => [
-            row.dni,
-            row.nombre,
-            formatUtcToLocal12h(fecha, row.hora_entrada, clientTz),
-            formatUtcToLocal12h(fecha, row.hora_salida, clientTz),
-            calculateWorkedHours(fecha, row.hora_entrada, row.hora_salida)
+        const records = Array.from(workerMap.values()).map(w => ({
+            dni: w.dni,
+            nombre: w.nombre,
+            hora_entrada: w.hora_entrada,
+            hora_salida: w.hora_salida,
+            hora_entrada_fmt: w.hora_entrada_fmt,
+            hora_salida_fmt: w.hora_salida_fmt,
+            total_horas: calculateWorkedHoursBetweenDates(w.entradaDate, w.salidaDate)
+        }));
+
+        records.sort((a, b) => (a.hora_entrada || '99').localeCompare(b.hora_entrada || '99') || a.nombre.localeCompare(b.nombre));
+
+        const rows = records.map(r => [
+            r.dni,
+            r.nombre,
+            r.hora_entrada_fmt || '-',
+            r.hora_salida_fmt || '-',
+            r.total_horas
         ]);
 
         await buildExcelSheet({
@@ -1150,8 +1292,9 @@ app.get('/api/reports/weekly', requireAdmin, async (req, res) => {
 
 // GET /api/reports/weekly/download - Descarga Excel Semanal
 app.get('/api/reports/weekly/download', requireAdmin, async (req, res) => {
+    const clientTz = req.query.tz || req.headers['x-timezone'] || 'UTC';
     let fecha = req.query.fecha;
-    const { fecha: todayFecha } = getLocalTime();
+    const todayFecha = getClientDate(clientTz);
     if (!fecha) fecha = todayFecha;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
         return res.status(400).send('Formato de fecha inválido (YYYY-MM-DD).');
@@ -1262,8 +1405,9 @@ app.get('/api/reports/monthly', requireAdmin, async (req, res) => {
 
 // GET /api/reports/monthly/download - Descarga Excel Mensual
 app.get('/api/reports/monthly/download', requireAdmin, async (req, res) => {
+    const clientTz = req.query.tz || req.headers['x-timezone'] || 'UTC';
     let mes = req.query.mes;
-    const { fecha: todayFecha } = getLocalTime();
+    const todayFecha = getClientDate(clientTz);
     if (!mes) mes = todayFecha.substring(0, 7);
     if (!/^\d{4}-\d{2}$/.test(mes)) {
         return res.status(400).send('Formato de mes inválido (YYYY-MM).');

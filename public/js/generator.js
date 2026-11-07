@@ -328,7 +328,14 @@ async function loadWorkersList() {
         tbody.innerHTML = '';
         
         workers.forEach(w => {
-            const date = new Date(w.created_at).toLocaleDateString('es-PE');
+            let date = '-';
+            if (w.created_at) {
+                const rawDate = w.created_at.includes('T') ? w.created_at : w.created_at.replace(' ', 'T') + 'Z';
+                const d = new Date(rawDate);
+                if (!isNaN(d.getTime())) {
+                    date = d.toLocaleDateString([], { year: 'numeric', month: '2-digit', day: '2-digit' });
+                }
+            }
             const safeDni = escapeHtml(w.dni);
             const safeName = escapeHtml(w.nombre);
             const safeCargo = escapeHtml(w.cargo) || '-';
