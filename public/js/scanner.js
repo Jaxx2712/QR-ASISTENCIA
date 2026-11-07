@@ -1,6 +1,21 @@
-let html5QrcodeScanner = null;
+// ============================================================
+// SAFETY: Monkey-patch getCapabilities para prevenir crash de
+// Chromium en ciertos Android WebView (v6432+) donde llamar
+// track.getCapabilities() causa NullPointerException en la
+// capa Mojo IPC de Chromium (hashCode() on null).
+// ============================================================
+if (window.MediaStreamTrack && MediaStreamTrack.prototype.getCapabilities) {
+    const _origGetCap = MediaStreamTrack.prototype.getCapabilities;
+    MediaStreamTrack.prototype.getCapabilities = function() {
+        try { return _origGetCap.call(this) || {}; } catch(e) { return {}; }
+    };
+}
+
+let videoStream = null;
+let scanAnimFrameId = null;
 let activeWorkerData = null;
 let isStartingScanner = false;
+let isScanningActive = false;
 
 function escapeHtml(str) {
     if (str === null || str === undefined) return '';
@@ -46,23 +61,39 @@ function startClock() {
     setInterval(updateTime, 1000);
 }
 
+// ============================================================
+// Scanner: getUserMedia directo + jsQR
+// Evita html5-qrcode que llama getCapabilities/enumerateDevices
+// internamente y causa crashes nativos en Chromium WebView.
+// ============================================================
+
 async function stopScannerAsync() {
-    if (html5QrcodeScanner) {
-        try {
-            if (html5QrcodeScanner.isScanning) {
-                await html5QrcodeScanner.stop();
-            }
-            await html5QrcodeScanner.clear();
-        } catch (e) {
-            console.warn('Aviso al detener el escáner:', e);
-        }
-        html5QrcodeScanner = null;
-        
-        const statusEl = document.getElementById('scannerStatus');
-        if (statusEl) {
-            statusEl.textContent = 'Cámara detenida';
-            statusEl.className = 'scanner-status';
-        }
+    isScanningActive = false;
+
+    // Cancelar loop de escaneo
+    if (scanAnimFrameId) {
+        cancelAnimationFrame(scanAnimFrameId);
+        scanAnimFrameId = null;
+    }
+
+    // Detener todos los tracks del stream de video
+    if (videoStream) {
+        videoStream.getTracks().forEach(track => {
+            try { track.stop(); } catch(e) { /* ignorar */ }
+        });
+        videoStream = null;
+    }
+
+    // Limpiar elemento video
+    const video = document.getElementById('scannerVideo');
+    if (video) {
+        video.srcObject = null;
+    }
+
+    const statusEl = document.getElementById('scannerStatus');
+    if (statusEl) {
+        statusEl.textContent = 'Cámara detenida';
+        statusEl.className = 'scanner-status';
     }
 }
 
@@ -78,27 +109,41 @@ async function startScanner() {
     if (readerElement) readerElement.style.display = 'block';
 
     try {
-        // 1. Limpieza segura y completa de cualquier instancia previa
+        // 1. Limpieza de cualquier stream previo
         await stopScannerAsync();
 
-        // 2. Instancia nueva de Html5Qrcode
-        html5QrcodeScanner = new Html5Qrcode('reader');
-        
-        const config = { 
-            fps: 10,
-            qrbox: { width: 250, height: 250 },
-            aspectRatio: 1.0,
-            disableFlip: true
-        };
+        // 2. Solicitar cámara con constraints mínimos
+        //    (NO usar enumerateDevices ni deviceId explícito para evitar
+        //     el bug de Chromium que causa NPE en hashCode())
+        let stream = null;
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'environment' },
+                audio: false
+            });
+        } catch (envErr) {
+            console.warn('Cámara trasera no disponible, intentando cualquier cámara:', envErr);
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: true,
+                audio: false
+            });
+        }
 
-        // 3. Iniciar cámara trasera de forma segura con facingMode 'environment'
-        // Esto evita enumerar dispositivos y previene pasar IDs nulos/vacíos a Chromium
-        await html5QrcodeScanner.start(
-            { facingMode: 'environment' },
-            config,
-            onScanSuccess,
-            () => {} // Ignorar fotogramas sin QR para fluidez
-        );
+        videoStream = stream;
+
+        // 3. Conectar stream al elemento <video>
+        const video = document.getElementById('scannerVideo');
+        if (!video) throw new Error('Elemento de video no encontrado');
+
+        video.srcObject = stream;
+        video.setAttribute('playsinline', 'true');
+        video.muted = true;
+
+        await video.play();
+
+        // 4. Iniciar loop de escaneo con jsQR
+        isScanningActive = true;
+        scanAnimFrameId = requestAnimationFrame(scanFrame);
 
         const statusEl = document.getElementById('scannerStatus');
         if (statusEl) {
@@ -106,28 +151,7 @@ async function startScanner() {
             statusEl.className = 'scanner-status active';
         }
     } catch (err) {
-        console.warn('Aviso al iniciar cámara trasera, probando fallback:', err);
-        
-        // Fallback controlado a cámara frontal o genérica
-        try {
-            if (html5QrcodeScanner) {
-                await html5QrcodeScanner.start(
-                    { facingMode: 'user' },
-                    { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0, disableFlip: true },
-                    onScanSuccess,
-                    () => {}
-                );
-                const statusEl = document.getElementById('scannerStatus');
-                if (statusEl) {
-                    statusEl.textContent = 'Cámara activa (Frontal) - Escaneando...';
-                    statusEl.className = 'scanner-status active';
-                }
-                return;
-            }
-        } catch (fallbackErr) {
-            console.error('Fallo en fallback de cámara:', fallbackErr);
-        }
-
+        console.error('Error al iniciar cámara:', err);
         showNotification('No se pudo acceder a la cámara. Verifica los permisos de la aplicación.', 'error');
         const statusEl = document.getElementById('scannerStatus');
         if (statusEl) {
@@ -139,24 +163,63 @@ async function startScanner() {
     }
 }
 
+function scanFrame() {
+    if (!isScanningActive) return;
+
+    const video = document.getElementById('scannerVideo');
+    const canvas = document.getElementById('scannerCanvas');
+
+    if (!video || !canvas || video.paused || video.ended || video.readyState < 2) {
+        // Video aún no listo, reintentar en el siguiente frame
+        scanAnimFrameId = requestAnimationFrame(scanFrame);
+        return;
+    }
+
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    if (canvas.width > 0 && canvas.height > 0) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: 'dontInvert'
+        });
+
+        if (code && code.data) {
+            onScanSuccess(code.data);
+            return; // Detener loop — se reinicia después de registrar asistencia
+        }
+    }
+
+    scanAnimFrameId = requestAnimationFrame(scanFrame);
+}
+
+// ============================================================
+// Procesamiento de QR escaneado
+// ============================================================
+
 async function onScanSuccess(decodedText) {
     try {
         const data = JSON.parse(decodedText);
         if (data.dni && data.nombre) {
             if (!/^\d{8}$/.test(data.dni)) {
                 showNotification('QR inválido: Formato de DNI incorrecto.', 'error');
+                // Continuar escaneando
+                if (isScanningActive) scanAnimFrameId = requestAnimationFrame(scanFrame);
                 return;
             }
             activeWorkerData = data;
             
-            // Show result section
+            // Mostrar sección de resultado
             const resultSection = document.getElementById('scanResult');
             if (resultSection) {
                 resultSection.style.display = 'block';
                 resultSection.classList.add('animate-in');
             }
             
-            // Update worker info
+            // Actualizar info del trabajador
             const initials = data.nombre.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
             const avatarEl = document.getElementById('resultAvatar');
             if (avatarEl) {
@@ -168,18 +231,26 @@ async function onScanSuccess(decodedText) {
             const dniEl = document.getElementById('resultDni');
             if (dniEl) dniEl.textContent = `DNI: ${data.dni}`;
             
-            // Detener el escáner de forma limpia mientras se confirma entrada/salida
+            // Detener el escáner mientras se confirma entrada/salida
             await stopScannerAsync();
             
             // Vibración háptica suave si está soportada
             if (navigator.vibrate) navigator.vibrate(200);
+        } else {
+            // QR válido pero sin datos esperados, continuar escaneando
+            if (isScanningActive) scanAnimFrameId = requestAnimationFrame(scanFrame);
         }
     } catch (e) {
         showNotification('QR no reconocido. Intenta de nuevo.', 'error');
+        // Continuar escaneando
+        if (isScanningActive) scanAnimFrameId = requestAnimationFrame(scanFrame);
     }
 }
 
-// Sustituye la función recordAttendance por esta versión:
+// ============================================================
+// Registro de asistencia
+// ============================================================
+
 async function recordAttendance(tipo) {
     if (!activeWorkerData) return;
 
@@ -212,6 +283,10 @@ async function recordAttendance(tipo) {
         showNotification('Error de conexión con el servidor', 'error');
     }
 }
+
+// ============================================================
+// Actividad reciente
+// ============================================================
 
 async function loadRecentActivity() {
     try {
@@ -269,6 +344,10 @@ async function loadRecentActivity() {
         console.error('Error loading activity:', error);
     }
 }
+
+// ============================================================
+// Utilidades
+// ============================================================
 
 function showNotification(message, type) {
     const notif = document.getElementById('notification');

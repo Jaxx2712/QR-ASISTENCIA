@@ -2,11 +2,9 @@ package com.empresa.qrasistencia;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
-import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.os.Environment;
 import android.webkit.DownloadListener;
-import android.webkit.PermissionRequest;
 import android.webkit.WebView;
 import android.widget.Toast;
 import android.media.MediaScannerConnection;
@@ -17,7 +15,6 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.view.WindowCompat;
 import com.getcapacitor.BridgeActivity;
-import com.getcapacitor.BridgeWebChromeClient;
 
 public class MainActivity extends BridgeActivity {
     private static final int CAMERA_PERMISSION_REQUEST_CODE = 1001;
@@ -42,41 +39,13 @@ public class MainActivity extends BridgeActivity {
             );
         }
 
-        // Configurar WebChromeClient seguro para evitar crashes nativos de WebView / Chromium en MIUI
-        bridge.getWebView().setWebChromeClient(new BridgeWebChromeClient(bridge) {
-            @Override
-            public Bitmap getDefaultVideoPoster() {
-                Bitmap poster = super.getDefaultVideoPoster();
-                if (poster == null) {
-                    return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);
-                }
-                return poster;
-            }
+        // IMPORTANTE: NO crear un nuevo BridgeWebChromeClient aquí.
+        // Capacitor Bridge ya crea uno internamente en super.onCreate() con manejo
+        // correcto de onPermissionRequest para cámara/micrófono.
+        // Crear un segundo registra ActivityResultLaunchers duplicados y puede
+        // causar conflictos de ciclo de vida que crashean el WebView.
 
-            @Override
-            public void onPermissionRequest(final PermissionRequest request) {
-                runOnUiThread(() -> {
-                    boolean allGranted = true;
-                    if (request.getResources() != null) {
-                        for (String res : request.getResources()) {
-                            if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(res)) {
-                                if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.CAMERA)
-                                        != PackageManager.PERMISSION_GRANTED) {
-                                    allGranted = false;
-                                }
-                            }
-                        }
-                    }
-
-                    if (allGranted) {
-                        request.grant(request.getResources());
-                    } else {
-                        super.onPermissionRequest(request);
-                    }
-                });
-            }
-        });
-
+        // Listener para descargar data: URLs (imágenes de carnets como PNG)
         bridge.getWebView().setDownloadListener(new DownloadListener() {
             @Override
             public void onDownloadStart(String url, String userAgent, String contentDisposition, String mimetype, long contentLength) {
@@ -98,24 +67,17 @@ public class MainActivity extends BridgeActivity {
                         fos.close();
 
                         MediaScannerConnection.scanFile(MainActivity.this,
-                                new String[]{file.getAbsolutePath()},
-                                new String[]{"image/png"}, null);
+                            new String[]{file.getAbsolutePath()},
+                            new String[]{"image/png"},
+                            null);
 
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                Toast.makeText(MainActivity.this, "¡Carnet guardado en Descargas!", Toast.LENGTH_LONG).show();
-                            }
-                        });
-
+                        Toast.makeText(MainActivity.this,
+                            "✅ Carnet guardado en Descargas: " + fileName,
+                            Toast.LENGTH_LONG).show();
                     } catch (Exception e) {
-                        e.printStackTrace();
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                Toast.makeText(MainActivity.this, "Error al guardar la imagen", Toast.LENGTH_SHORT).show();
-                            }
-                        });
+                        Toast.makeText(MainActivity.this,
+                            "Error al guardar: " + e.getMessage(),
+                            Toast.LENGTH_SHORT).show();
                     }
                 }
             }

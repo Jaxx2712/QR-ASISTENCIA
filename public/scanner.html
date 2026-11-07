@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="js/jsqr.min.js"></script>
     <script src="js/auth.js"></script>
     <style>
         .scanner-container {
@@ -397,7 +397,10 @@
                             <p>Escanea el QR del trabajador para registrar su asistencia</p>
                         </div>
                         
-                        <div id="reader"></div>
+                        <div id="reader">
+                            <video id="scannerVideo" autoplay playsinline muted style="width:100%; max-height:60vh; display:block;"></video>
+                            <canvas id="scannerCanvas" style="display:none;"></canvas>
+                        </div>
                         
                         <div id="scannerStatus" class="scanner-status">Cámara inactiva</div>
                         
