@@ -1,21 +1,6 @@
-// ============================================================
-// SAFETY: Monkey-patch getCapabilities para prevenir crash de
-// Chromium en ciertos Android WebView (v6432+) donde llamar
-// track.getCapabilities() causa NullPointerException en la
-// capa Mojo IPC de Chromium (hashCode() on null).
-// ============================================================
-if (window.MediaStreamTrack && MediaStreamTrack.prototype.getCapabilities) {
-    const _origGetCap = MediaStreamTrack.prototype.getCapabilities;
-    MediaStreamTrack.prototype.getCapabilities = function() {
-        try { return _origGetCap.call(this) || {}; } catch(e) { return {}; }
-    };
-}
-
-let videoStream = null;
-let scanAnimFrameId = null;
+let html5QrcodeScanner = null;
 let activeWorkerData = null;
 let isStartingScanner = false;
-let isScanningActive = false;
 
 function escapeHtml(str) {
     if (str === null || str === undefined) return '';
@@ -33,7 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(loadRecentActivity, 10000);
 });
 
-// Live real-time clock (local al dispositivo)
+// Live real-time clock
 function startClock() {
     const clockEl = document.getElementById('clock');
     if (!clockEl) return;
@@ -61,46 +46,6 @@ function startClock() {
     setInterval(updateTime, 1000);
 }
 
-// ============================================================
-// Scanner: getUserMedia directo + jsQR
-// Evita html5-qrcode que llama getCapabilities/enumerateDevices
-// internamente y causa crashes nativos en Chromium WebView.
-// ============================================================
-
-async function stopScannerAsync() {
-    isScanningActive = false;
-
-    // Cancelar loop de escaneo
-    if (scanAnimFrameId) {
-        cancelAnimationFrame(scanAnimFrameId);
-        scanAnimFrameId = null;
-    }
-
-    // Detener todos los tracks del stream de video
-    if (videoStream) {
-        videoStream.getTracks().forEach(track => {
-            try { track.stop(); } catch(e) { /* ignorar */ }
-        });
-        videoStream = null;
-    }
-
-    // Limpiar elemento video
-    const video = document.getElementById('scannerVideo');
-    if (video) {
-        video.srcObject = null;
-    }
-
-    const statusEl = document.getElementById('scannerStatus');
-    if (statusEl) {
-        statusEl.textContent = 'Cámara detenida';
-        statusEl.className = 'scanner-status';
-    }
-}
-
-function stopScanner() {
-    stopScannerAsync();
-}
-
 async function startScanner() {
     if (isStartingScanner) return;
     isStartingScanner = true;
@@ -109,41 +54,47 @@ async function startScanner() {
     if (readerElement) readerElement.style.display = 'block';
 
     try {
-        // 1. Limpieza de cualquier stream previo
-        await stopScannerAsync();
-
-        // 2. Solicitar cámara con constraints mínimos
-        //    (NO usar enumerateDevices ni deviceId explícito para evitar
-        //     el bug de Chromium que causa NPE en hashCode())
-        let stream = null;
-        try {
-            stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'environment' },
-                audio: false
-            });
-        } catch (envErr) {
-            console.warn('Cámara trasera no disponible, intentando cualquier cámara:', envErr);
-            stream = await navigator.mediaDevices.getUserMedia({
-                video: true,
-                audio: false
-            });
+        // 1. Limpiar cualquier instancia previa de forma segura y completa
+        if (html5QrcodeScanner) {
+            try {
+                await html5QrcodeScanner.stop();
+                await html5QrcodeScanner.clear();
+            } catch (e) {
+                console.warn('Aviso al limpiar instancia anterior:', e);
+            }
+            html5QrcodeScanner = null;
         }
 
-        videoStream = stream;
+        html5QrcodeScanner = new Html5Qrcode('reader');
+        
+        const config = { 
+            fps: 10,
+            qrbox: { width: 250, height: 250 },
+            aspectRatio: 1.0,
+            disableFlip: true
+        };
 
-        // 3. Conectar stream al elemento <video>
-        const video = document.getElementById('scannerVideo');
-        if (!video) throw new Error('Elemento de video no encontrado');
+        // 2. Detectar cámaras disponibles para evitar errores de restricciones en Android
+        let cameraTarget = { facingMode: 'environment' };
+        try {
+            const devices = await Html5Qrcode.getCameras();
+            if (devices && devices.length > 0) {
+                const backCamera = devices.find(device => /back|rear|environment|traseira/i.test(device.label));
+                cameraTarget = backCamera ? backCamera.id : devices[0].id;
+            }
+        } catch (camErr) {
+            console.warn('No se pudo listar cámaras, usando facingMode por defecto:', camErr);
+        }
 
-        video.srcObject = stream;
-        video.setAttribute('playsinline', 'true');
-        video.muted = true;
-
-        await video.play();
-
-        // 4. Iniciar loop de escaneo con jsQR
-        isScanningActive = true;
-        scanAnimFrameId = requestAnimationFrame(scanFrame);
+        // 3. Iniciar el escáner con el objetivo seleccionado
+        await html5QrcodeScanner.start(
+            cameraTarget,
+            config,
+            onScanSuccess,
+            (errorMessage) => {
+                // Ignorar fotogramas vacíos para optimizar rendimiento
+            }
+        );
 
         const statusEl = document.getElementById('scannerStatus');
         if (statusEl) {
@@ -151,123 +102,92 @@ async function startScanner() {
             statusEl.className = 'scanner-status active';
         }
     } catch (err) {
-        console.error('Error al iniciar cámara:', err);
-        showNotification('No se pudo acceder a la cámara. Verifica los permisos de la aplicación.', 'error');
-        const statusEl = document.getElementById('scannerStatus');
-        if (statusEl) {
-            statusEl.textContent = 'Cámara no disponible';
-            statusEl.className = 'scanner-status';
+        console.error('Error crítico al iniciar la cámara:', err);
+        
+        // Fallback automático a la cámara frontal o genérica si falla la trasera
+        try {
+            if (html5QrcodeScanner) {
+                await html5QrcodeScanner.start(
+                    { facingMode: 'user' },
+                    { fps: 10, qrbox: { width: 250, height: 250 } },
+                    onScanSuccess,
+                    () => {}
+                );
+                return;
+            }
+        } catch (fallbackErr) {
+            console.error('Fallo total de acceso a cámara:', fallbackErr);
         }
+
+        showNotification('No se pudo acceder a la cámara. Verifica los permisos de la aplicación.', 'error');
     } finally {
         isStartingScanner = false;
     }
 }
 
-function scanFrame() {
-    if (!isScanningActive) return;
-
-    const video = document.getElementById('scannerVideo');
-    const canvas = document.getElementById('scannerCanvas');
-
-    // Validar que el video esté listo y tenga dimensiones reales (evita que se quede atascado en 0)
-    if (!video || !canvas || video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) {
-        scanAnimFrameId = requestAnimationFrame(scanFrame);
-        return;
-    }
-
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    
-    if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-    }
-
-    try {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-        // Usar 'attemptBoth' para leer tanto códigos normales como invertidos (ideal para pantallas)
-        const code = jsQR(imageData.data, imageData.width, imageData.height, {
-            inversionAttempts: 'attemptBoth'
-        });
-
-        if (code && code.data) {
-            console.log("¡QR detectado con éxito!", code.data);
-            onScanSuccess(code.data);
-            return; // Detener loop
+async function stopScannerAsync() {
+    if (html5QrcodeScanner) {
+        try {
+            await html5QrcodeScanner.stop();
+            await html5QrcodeScanner.clear();
+        } catch (e) {
+            console.error('Error al detener el escáner:', e);
         }
-    } catch (e) {
-        console.error("Error al procesar el fotograma del canvas:", e);
+        html5QrcodeScanner = null;
+        
+        const statusEl = document.getElementById('scannerStatus');
+        if (statusEl) {
+            statusEl.textContent = 'Cámara detenida';
+            statusEl.className = 'scanner-status';
+        }
     }
-
-    // Continuar escaneando en el siguiente frame
-    scanAnimFrameId = requestAnimationFrame(scanFrame);
 }
 
-// ============================================================
-// Procesamiento de QR escaneado
-// ============================================================
+function stopScanner() {
+    stopScannerAsync();
+}
 
 async function onScanSuccess(decodedText) {
     try {
-        let dni = '';
-        let nombre = 'Trabajador';
-
-        // Intentar parsear como JSON por si el QR fue generado con objeto
-        try {
-            const data = JSON.parse(decodedText);
-            dni = data.dni || '';
-            nombre = data.nombre || 'Trabajador';
-        } catch (e) {
-            // Si no es JSON, asumimos que el texto escaneado es directamente el DNI
-            dni = decodedText.trim();
-        }
-
-        if (dni) {
-            if (!/^\d{8}$/.test(dni)) {
+        const data = JSON.parse(decodedText);
+        if (data.dni && data.nombre) {
+            if (!/^\d{8}$/.test(data.dni)) {
                 showNotification('QR inválido: Formato de DNI incorrecto.', 'error');
-                if (isScanningActive) scanAnimFrameId = requestAnimationFrame(scanFrame);
                 return;
             }
-
-            // Opcional: Consultar los datos del trabajador al servidor si solo tenemos el DNI
-            activeWorkerData = { dni: dni, nombre: nombre };
+            activeWorkerData = data;
             
+            // Show result section
             const resultSection = document.getElementById('scanResult');
             if (resultSection) {
                 resultSection.style.display = 'block';
                 resultSection.classList.add('animate-in');
             }
             
-            const initials = nombre.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+            // Update worker info
+            const initials = data.nombre.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
             const avatarEl = document.getElementById('resultAvatar');
             if (avatarEl) {
                 avatarEl.textContent = initials;
-                avatarEl.style.backgroundColor = getAvatarColor(nombre);
+                avatarEl.style.backgroundColor = getAvatarColor(data.nombre);
             }
             const nameEl = document.getElementById('resultName');
-            if (nameEl) nameEl.textContent = nombre;
+            if (nameEl) nameEl.textContent = data.nombre;
             const dniEl = document.getElementById('resultDni');
-            if (dniEl) dniEl.textContent = `DNI: ${dni}`;
+            if (dniEl) dniEl.textContent = `DNI: ${data.dni}`;
             
-            // Detener la cámara mientras el usuario confirma Entrada o Salida
+            // Detener el escáner de forma segura y controlada con await
             await stopScannerAsync();
             
+            // Play a subtle beep/vibration if available
             if (navigator.vibrate) navigator.vibrate(200);
-        } else {
-            if (isScanningActive) scanAnimFrameId = requestAnimationFrame(scanFrame);
         }
     } catch (e) {
-        console.error('Error procesando QR:', e);
         showNotification('QR no reconocido. Intenta de nuevo.', 'error');
-        if (isScanningActive) scanAnimFrameId = requestAnimationFrame(scanFrame);
     }
 }
 
-// ============================================================
-// Registro de asistencia
-// ============================================================
-
+// Sustituye la función recordAttendance por esta versión:
 async function recordAttendance(tipo) {
     if (!activeWorkerData) return;
 
@@ -290,7 +210,7 @@ async function recordAttendance(tipo) {
             showNotification(data.message || `¡Asistencia (${tipo.toUpperCase()}) registrada correctamente!`, 'success');
             document.getElementById('scanResult').style.display = 'none';
             activeWorkerData = null;
-            await startScanner();
+            startScanner();
             loadRecentActivity();
         } else {
             showNotification(data.message || 'Error al registrar asistencia', 'error');
@@ -300,10 +220,6 @@ async function recordAttendance(tipo) {
         showNotification('Error de conexión con el servidor', 'error');
     }
 }
-
-// ============================================================
-// Actividad reciente
-// ============================================================
 
 async function loadRecentActivity() {
     try {
@@ -321,16 +237,15 @@ async function loadRecentActivity() {
             const safeDni = escapeHtml(record.worker_dni || record.id);
             const safeTipo = escapeHtml(record.tipo || record.type);
             
-            // Convertir UTC a hora y fecha local del dispositivo
+            // Convertir UTC a hora local del navegador añadiendo 'Z'
             let safeHora = '--:--:--';
             let safeFecha = '--/--/----';
             if (record.fecha && record.hora) {
-                const cleanHora = record.hora.includes('Z') ? record.hora : `${record.hora}Z`;
-                const utcString = `${record.fecha}T${cleanHora}`;
+                const utcString = `${record.fecha}T${record.hora}Z`;
                 const localDate = new Date(utcString);
                 if (!isNaN(localDate.getTime())) {
-                    safeHora = escapeHtml(localDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-                    safeFecha = escapeHtml(localDate.toLocaleDateString([], { year: 'numeric', month: '2-digit', day: '2-digit' }));
+                    safeHora = escapeHtml(localDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+                    safeFecha = escapeHtml(localDate.toLocaleDateString('es-ES', { year: 'numeric', month: '2-digit', day: '2-digit' }).split('/').reverse().join('-'));
                 } else {
                     safeHora = escapeHtml(record.hora);
                     safeFecha = escapeHtml(record.fecha);
@@ -361,10 +276,6 @@ async function loadRecentActivity() {
         console.error('Error loading activity:', error);
     }
 }
-
-// ============================================================
-// Utilidades
-// ============================================================
 
 function showNotification(message, type) {
     const notif = document.getElementById('notification');

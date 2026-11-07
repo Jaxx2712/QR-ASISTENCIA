@@ -27,13 +27,6 @@ function escapeHtml(str) {
 
 function formatLocalTime(fechaStr, horaStr) {
     if (!horaStr) return '';
-    // Asegurar formato ISO con 'Z' para conversión UTC -> Local automática
-    const cleanHora = horaStr.includes('Z') ? horaStr : `${horaStr}Z`;
-    const dateObj = new Date(`${fechaStr}T${cleanHora}`);
-    
-    if (!isNaN(dateObj.getTime())) {
-        return dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-    }
     return horaStr;
 }
 
@@ -317,17 +310,16 @@ function renderDailyTable(data) {
 
     // Renderizar filas convirtiendo cada hora usando la fecha base del reporte
     renderTableBody(records, rec => {
-        // Usar la fecha del registro o la fecha consultada como base para formatear la hora local
         const recordDate = rec.fecha || data.fecha;
-        const localEntrada = formatLocalTime(recordDate, rec.hora_entrada);
-        const localSalida = formatLocalTime(recordDate, rec.hora_salida);
+        const localEntrada = rec.hora_entrada_fmt || rec.hora_entrada || '-';
+        const localSalida = rec.hora_salida_fmt || rec.hora_salida || '-';
         const horas = rec.total_horas || calculateClientHoursWorked(recordDate, rec.hora_entrada, rec.hora_salida);
         
         return `
             <td>${escapeHtml(rec.dni)}</td>
             <td>${escapeHtml(rec.nombre)}</td>
-            <td>${escapeHtml(localEntrada || '-')}</td>
-            <td>${escapeHtml(localSalida || '-')}</td>
+            <td>${escapeHtml(localEntrada)}</td>
+            <td>${escapeHtml(localSalida)}</td>
             <td><span class="badge-hours">${escapeHtml(horas)}</span></td>
         `;
     }, 5);
