@@ -169,30 +169,38 @@ function scanFrame() {
     const video = document.getElementById('scannerVideo');
     const canvas = document.getElementById('scannerCanvas');
 
-    if (!video || !canvas || video.paused || video.ended || video.readyState < 2) {
-        // Video aún no listo, reintentar en el siguiente frame
+    // Validar que el video esté listo y tenga dimensiones reales (evita que se quede atascado en 0)
+    if (!video || !canvas || video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) {
         scanAnimFrameId = requestAnimationFrame(scanFrame);
         return;
     }
 
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    
+    if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+    }
 
-    if (canvas.width > 0 && canvas.height > 0) {
+    try {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
+        // Usar 'attemptBoth' para leer tanto códigos normales como invertidos (ideal para pantallas)
         const code = jsQR(imageData.data, imageData.width, imageData.height, {
             inversionAttempts: 'attemptBoth'
         });
 
         if (code && code.data) {
+            console.log("¡QR detectado con éxito!", code.data);
             onScanSuccess(code.data);
-            return; // Detener loop — se reinicia después de registrar asistencia
+            return; // Detener loop
         }
+    } catch (e) {
+        console.error("Error al procesar el fotograma del canvas:", e);
     }
 
+    // Continuar escaneando en el siguiente frame
     scanAnimFrameId = requestAnimationFrame(scanFrame);
 }
 
