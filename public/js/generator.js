@@ -3,6 +3,14 @@ document.addEventListener('DOMContentLoaded', () => {
     loadWorkersList();
 });
 
+// Convierte un string con caracteres Unicode (tildes, ñ, etc.) a una secuencia
+// de bytes UTF-8 representados como caracteres Latin-1, para que QRious
+// (que usa charCodeAt internamente) escriba bytes UTF-8 correctos en el QR.
+// jsQR luego los decodifica correctamente como UTF-8.
+function toUtf8ForQR(str) {
+    return unescape(encodeURIComponent(str));
+}
+
 // Live clock
 function startClock() {
     const clockEl = document.getElementById('clock');
@@ -82,7 +90,7 @@ async function generateQR() {
         const qrCanvas = document.getElementById('qrCanvas');
         new QRious({
             element: qrCanvas,
-            value: JSON.stringify({ dni, nombre }),
+            value: toUtf8ForQR(JSON.stringify({ dni, nombre })),
             size: 200,
             level: 'H',
             background: '#ffffff',
@@ -289,7 +297,7 @@ async function regenerateBadge(dni) {
     const qrCanvas = document.getElementById('qrCanvas');
     new QRious({
         element: qrCanvas,
-        value: JSON.stringify({ dni: worker.dni, nombre: worker.nombre }),
+        value: toUtf8ForQR(JSON.stringify({ dni: worker.dni, nombre: worker.nombre })),
         size: 200,
         level: 'H',
         background: '#ffffff',
